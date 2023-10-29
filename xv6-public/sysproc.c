@@ -89,3 +89,16 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// here is our kernal level program, this will eventually call our user level
+// program that is defined in proc.c get args from user space
+int sys_mmap(void)
+{
+  return 0;
+}
+
+// the goal of this function is unmap memory, we need to get args from the user spac e
+int sys_munmap(void)
+{
+  return 0;
+}
