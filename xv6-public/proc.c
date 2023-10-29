@@ -532,3 +532,13 @@ procdump(void)
     cprintf("\n");
   }
 }
+
+// I decided to define our user level functions in proc.c as this is where almost everyting happens
+
+void *mmap(void *addr, int length, int prot, int flags, int fd, int offset){
+  return 0; 
+}
+
+int munmap(void *addr, int length){
+  return 0; 
+}
