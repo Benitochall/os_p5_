@@ -35,6 +35,8 @@ seginit(void)
 static pte_t *
 walkpgdir(pde_t *pgdir, const void *va, int alloc)
 {
+  // Step 6. 
+  // we are getting the pagedirectory, the virtual address 
   pde_t *pde;
   pte_t *pgtab;
 
@@ -51,7 +53,7 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
     // entries, if necessary.
     *pde = V2P(pgtab) | PTE_P | PTE_W | PTE_U;
   }
-  return &pgtab[PTX(va)];
+  return &pgtab[PTX(va)]; // returns a page table entry
 }
 
 // Create PTEs for virtual addresses starting at va that refer to
@@ -60,21 +62,28 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
 static int
 mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm)
 {
+  // 5. this makes sense, we pass in the adress of the pgdir we have made
+  // the va of the thing we need
+  // the size of the region, 
+  // the physical address start
+
+  // for each virtual page 
   char *a, *last;
   pte_t *pte;
 
-  a = (char*)PGROUNDDOWN((uint)va);
-  last = (char*)PGROUNDDOWN(((uint)va) + size - 1);
+  a = (char*)PGROUNDDOWN((uint)va); // rounds the va to something divisiable by 4096
+  last = (char*)PGROUNDDOWN(((uint)va) + size - 1); // rounds the top of the space we need to map to a 4096 page
   for(;;){
-    if((pte = walkpgdir(pgdir, a, 1)) == 0)
+    if((pte = walkpgdir(pgdir, a, 1)) == 0) // now we call walkpgdir what does this do?
+    // for each virtual page in range it gets the page table entry associated with it
       return -1;
     if(*pte & PTE_P)
       panic("remap");
     *pte = pa | perm | PTE_P;
     if(a == last)
       break;
-    a += PGSIZE;
-    pa += PGSIZE;
+    a += PGSIZE; // advance to the next virtual page 
+    pa += PGSIZE; // advance to the next physcal apge
   }
   return 0;
 }
@@ -118,17 +127,23 @@ static struct kmap {
 pde_t*
 setupkvm(void)
 {
-  pde_t *pgdir;
+  //4. 
+  pde_t *pgdir; // this is the page directory for the current process
   struct kmap *k;
 
-  if((pgdir = (pde_t*)kalloc()) == 0)
+  if((pgdir = (pde_t*)kalloc()) == 0) // gets a 4096 byte page for the pagedirectory
     return 0;
-  memset(pgdir, 0, PGSIZE);
+  memset(pgdir, 0, PGSIZE);  // zeros out the 4096 bytes
   if (P2V(PHYSTOP) > (void*)DEVSPACE)
     panic("PHYSTOP too high");
-  for(k = kmap; k < &kmap[NELEM(kmap)]; k++)
+  for(k = kmap; k < &kmap[NELEM(kmap)]; k++) // for each kmap structure. what is a kmap structure?
+  // a kmap structure contains the 
+  // k->virt the starting virtual address of the memory region
+  // k->phys_start this is the corresponding pa of the k->virt 
+  // k->phys_end this is ending physical address of the k->virt range
+  // from here we call mappages with the pgdir
     if(mappages(pgdir, k->virt, k->phys_end - k->phys_start,
-                (uint)k->phys_start, k->perm) < 0) {
+                (uint)k->phys_start, k->perm) < 0) { 
       freevm(pgdir);
       return 0;
     }
