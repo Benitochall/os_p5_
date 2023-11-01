@@ -7,6 +7,9 @@
 #include "x86.h"
 #include "traps.h"
 #include "spinlock.h"
+#include "proc.h"
+
+#define T_PGFLT 14
 
 // Interrupt descriptor table (shared by all CPUs).
 struct gatedesc idt[256];
@@ -76,7 +79,10 @@ trap(struct trapframe *tf)
     cprintf("cpu%d: spurious interrupt at %x:%x\n",
             cpuid(), tf->cs, tf->eip);
     lapiceoi();
-    break;
+    break; 
+  case T_PGFLT:
+      page_fault_handler(rcr2()); // Handle page fault, pass the viral addrss in 
+      break;
 
   //PAGEBREAK: 13
   default:

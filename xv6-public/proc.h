@@ -10,6 +10,15 @@ struct cpu {
   struct proc *proc;           // The process running on this cpu or null
 };
 
+struct mem_mapping {
+  uint addr; // Starting virtual address
+  int length; // Length of the mapping in bytes
+  int flags;  // Flags as passed to mmap (e.g., MAP_FIXED, MAP_ANONYMOUS, etc.)
+  int fd;     // File descriptor for file-backed mappings, if applicable
+};
+
+void page_fault_handler(unit addr); // the trap haneler
+
 extern struct cpu cpus[NCPU];
 extern int ncpu;
 
@@ -63,10 +72,5 @@ void *mmap(void *addr, int length, int prot, int flags, int fd, int offset);
 int munmap(void *addr, int length);
 
 // here create a structure of processes 
-struct mem_mapping {
-  uint addr; // Starting virtual address
-  int length; // Length of the mapping in bytes
-  int flags;  // Flags as passed to mmap (e.g., MAP_FIXED, MAP_ANONYMOUS, etc.)
-  int fd;     // File descriptor for file-backed mappings, if applicable
-};
+
 
