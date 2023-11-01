@@ -9,8 +9,7 @@
 #include "mmap.h"
 
 #define MMAP_AREA_START 0x60000000
-#define MMAP_AREA_END   0x80000000
-
+#define MMAP_AREA_END 0x80000000
 
 int sys_fork(void)
 {
@@ -90,24 +89,33 @@ int sys_uptime(void)
 }
 
 // Function to find an available address
-uint find_available_address(int length) {
+uint find_available_address(int length)
+{
   struct proc *curproc = myproc();
   uint addr = MMAP_AREA_START;
 
-  while (addr + length <= MMAP_AREA_END) {
+  while (addr + length <= MMAP_AREA_END)
+  {
     int overlap = 0;
-    for (int i = 0; i < curproc->num_mappings; i++) {
-      if (/* addr overlaps with curproc->mappings[i] */) {
+    for (int i = 0; i < curproc->num_mappings; i++)
+    {
+      uint existing_start = curproc->memoryMappings[i].addr;
+      uint existing_end = existing_start + curproc->memoryMappings[i].length;
+      uint new_end = addr + length;
+
+      if ((existing_start < new_end && existing_end > addr))
+      {
         overlap = 1;
         break;
       }
     }
-    if (!overlap) {
-      return addr;  // Found an available address
+    if (!overlap)
+    {
+      return addr; // Found an available address
     }
     addr += PGSIZE;
   }
-  return 0;  // Failed to find an available address
+  return 0; // Failed to find an available address
 }
 
 // here is our kernal level program, this will eventually call our user level
@@ -152,24 +160,31 @@ int sys_mmap(void)
     return -1;
   }
 
-  //If it's not an anonymous mapping, validate that the file descriptor is valid, and the offset is within the file bounds.
-  if (!(flags & MAP_ANONYMOUS)) {
-  if (fd < 0 || fd >= NOFILE || myproc()->ofile[fd] == 0) {
-    return -1;  // Invalid file descriptor
+  // If it's not an anonymous mapping, validate that the file descriptor is valid, and the offset is within the file bounds.
+  if (!(flags & MAP_ANONYMOUS))
+  {
+    if (fd < 0 || fd >= NOFILE || myproc()->ofile[fd] == 0)
+    {
+      return -1; // Invalid file descriptor
+    }
+    if (offset < 0 || offset >= file_size(myproc()->ofile[fd]))
+    {
+      return -1; // Invalid offset
+    }
   }
-  if (offset < 0 || offset >= file_size(myproc()->ofile[fd])) {
-    return -1;  // Invalid offset
-  }
-}
 
-// Address allocation
+  // Address allocation
   uint new_address;
-  if (flags & MAP_FIXED) {
+  if (flags & MAP_FIXED)
+  {
     new_address = (uint)addr;
-  } else {
+  }
+  else
+  {
     new_address = find_available_address(length);
-    if (new_address == 0) {
-      return -1;  // Failed to find an available address
+    if (new_address == 0)
+    {
+      return -1; // Failed to find an available address
     }
   }
 
@@ -181,12 +196,14 @@ int sys_mmap(void)
 
   // Add the new mapping to the process's list of mappings
   struct proc *curproc = myproc();
-  curproc->mappings[curproc->num_mappings] = (struct mem_mapping){
-    .addr = new_address,
-    .length = length,
-    .flags = flags,
-    .fd = fd
-  };
+  struct mem_mapping new_mapping;
+
+  new_mapping.addr = new_address;
+  new_mapping.length = length;
+  new_mapping.flags = flags;
+  new_mapping.fd = fd;
+
+  curproc->memoryMappings[curproc->num_mappings] = new_mapping;
   curproc->num_mappings++;
 
   // this is where we need to call mmap

@@ -49,7 +49,7 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-  struct mappings memoryMappings[32];
+  struct mem_mapping memoryMappings[32];
   int num_mappings; 
 };
 
@@ -63,11 +63,10 @@ void *mmap(void *addr, int length, int prot, int flags, int fd, int offset);
 int munmap(void *addr, int length);
 
 // here create a structure of processes 
-struct mappings {
-    void* va;
-    void* pa;
-    int length;
-    int prot;
-    int flags[5];
+struct mem_mapping {
+  uint addr; // Starting virtual address
+  int length; // Length of the mapping in bytes
+  int flags;  // Flags as passed to mmap (e.g., MAP_FIXED, MAP_ANONYMOUS, etc.)
+  int fd;     // File descriptor for file-backed mappings, if applicable
 };
 
