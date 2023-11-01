@@ -193,6 +193,29 @@ int sys_mmap(void)
 
   // Placeholder for file-backed mapping logic
   // ...
+//   if (!(flags & MAP_ANONYMOUS)) {
+//   struct file *f = myproc()->ofile[fd];
+//   char *mem = kalloc();  // Allocate one page frame from the kernel
+//   if (mem == 0) {
+//     return -1;  // Allocation failed
+//   }
+
+//   // Read file content into the memory
+//   ilock(f->ip);
+//   int n = readi(f->ip, mem, offset, PGSIZE);
+//   iunlock(f->ip);
+
+//   if (n < 0) {
+//     kfree(mem);  // Free the allocated memory if read failed
+//     return -1;
+//   }
+
+//   // Map this memory to the virtual address in the process's address space
+//   if (mappages(myproc()->pgdir, (char *)new_address, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0) {
+//     kfree(mem);  // Free the allocated memory if mapping failed
+//     return -1;
+//   }
+// }
 
   // Add the new mapping to the process's list of mappings
   struct proc *curproc = myproc();
