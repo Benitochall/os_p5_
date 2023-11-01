@@ -544,23 +544,29 @@ procdump(void)
 // I decided to define our user level functions in proc.c as this is where almost everyting happens
 
 void *mmap(void *addr, int length, int prot, int flags, int fd, int offset){
-  // ok in this function we have to get the va of the block of memory using kalloc()
-  // and mappages
-  // kalloc will return the first free page 
-    struct proc *currproc;
-    currproc = myproc(); 
+    struct proc *currproc = myproc(); 
 
-  
-    mem = kalloc(); // this is going to be our first page of memory
-    if(mem == 0){
-      cprintf("allocuvm out of memory\n");
-      //deallocuvm(pgdir, newsz, oldsz);
-      return 0;
+    char *mem = kalloc();
+    if (mem == 0) {
+        cprintf("allocuvm out of memory\n");
+        return 0;
     }
     memset(mem, 0, PGSIZE);
-    mappages(currproc->pgdir, 0, PGSIZE, V2P(mem), PTE_W|PTE_U);
-  
-  return 0; 
+
+    uint va = PGROUNDUP(currproc->sz); 
+    if (mappages(currproc->pgdir, (void*)va, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0) {
+        // If mapping fails, free allocated physical memory and return 0
+        kfree(mem);
+        return 0;
+    }
+
+    // Step 3: Keep track of the mapped region and its length
+    currproc->sz = va + PGSIZE; // Update process size to include the mapped region
+
+    // Store the mapped region and its length in a data structure, if needed
+    // You can use a linked list, array, or any other suitable data structure to track the mappings.
+
+    return (void*)va; // Return the starting virtual address of the mapped region
 }
 
 int munmap(void *addr, int length){

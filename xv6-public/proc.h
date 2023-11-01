@@ -49,6 +49,8 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  struct mappings memoryMappings[32];
+  int num_mappings; 
 };
 
 // Process memory is laid out contiguously, low addresses first:
@@ -61,16 +63,11 @@ void *mmap(void *addr, int length, int prot, int flags, int fd, int offset);
 int munmap(void *addr, int length);
 
 // here create a structure of processes 
-struct mapping_t {
-  int length; 
-  int fd; 
-  int use;
-  int flags[5];
+struct mappings {
+    void* va;
+    void* pa;
+    int length;
+    int prot;
+    int flags[5];
 };
 
-struct mapping_array {
-  unit page; 
-  int dirty; 
-  int use; 
-  int map_index; 
-};
