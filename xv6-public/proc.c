@@ -543,30 +543,46 @@ procdump(void)
 
 // I decided to define our user level functions in proc.c as this is where almost everyting happens
 
+void page_fault_handler(uint va){
+  
+  /* Case 1 - Lazy Allocation */
+  // go throgh kalloc routine
+  struct proc *currproc = myproc(); // get the current process
+
+  // get the number of array of mappings 
+  int num_mappings = currproc->num_mappings; 
+
+  // I don't even care about the other mappings 
+  
+  for (int i = 0; i < num_mappings; i++) {
+    // now I need to get the specific mapping at I
+    struct mem_mapping *map = currproc->memoryMappings[i];
+
+    if (va >= map->addr && va < PGROUNDUP(map->addr + map->length)) { // rounds up the to the next page
+        char *mem = kalloc(); // grab the next avaiblable page
+        if (mem == 0) {
+            panic("out of memory\n");
+        }
+        // the virutal address is automatically rounded down to the nearest page 
+        memset(mem, 0, PGSIZE); // zero out the page
+        if (mappages(currproc->pgdir, (char*)va, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0) { // map the page to physical address
+            kfree(mem);
+            panic("mapping failed");
+        }
+        return;
+    }
+  }
+
+  /* Case 2 - MAP_GROWSUP */
+  /* Case 3 - None of the Above - Error */
+  cprintf("Segmentation Fault\n");
+  //kill_the_process() 
+
+
+}
+
 void *mmap(void *addr, int length, int prot, int flags, int fd, int offset){
-    struct proc *currproc = myproc(); 
-    char* mem = kalloc(); // this is going to be our first page of memory
-    if(mem == 0){
-      cprintf("allocuvm out of memory\n");
-      //deallocuvm(pgdir, newsz, oldsz);
-      return 0;
-    }
-    memset(mem, 0, PGSIZE);
-
-    uint va = PGROUNDUP(currproc->sz); 
-    if (mappages(currproc->pgdir, (void*)va, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0) {
-        // If mapping fails, free allocated physical memory and return 0
-        kfree(mem);
-        return 0;
-    }
-
-    // Step 3: Keep track of the mapped region and its length
-    currproc->sz = va + PGSIZE; // Update process size to include the mapped region
-
-    // Store the mapped region and its length in a data structure, if needed
-    // You can use a linked list, array, or any other suitable data structure to track the mappings.
-
-    return (void*)va; // Return the starting virtual address of the mapped region
+    return
 }
 
 int munmap(void *addr, int length){

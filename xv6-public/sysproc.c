@@ -99,11 +99,12 @@ uint find_available_address(int length)
     int overlap = 0;
     for (int i = 0; i < curproc->num_mappings; i++)
     {
-      uint existing_start = curproc->memoryMappings[i].addr;
-      uint existing_end = existing_start + curproc->memoryMappings[i].length;
-      uint new_end = addr + length;
+      uint existing_start = curproc->memoryMappings[i].addr; // get the start of the first mapping 
+      uint existing_end = existing_start + PGROUNDUP(curproc->memoryMappings[i].length); // get the end of the currmapping
+      uint new_end = addr + length; // get the new end of the address 
 
-      if ((existing_start < new_end && existing_end > addr))
+      if ((existing_start < new_end && existing_end > addr)) // if the current address has a mapping and the existing end is greater than address
+      // we have found a region that has already been mapped, therefore we should break and increment addr by page size
       {
         overlap = 1;
         break;
@@ -123,7 +124,7 @@ uint find_available_address(int length)
 int sys_mmap(void)
 {
   void *addr; // the requested address
-  int length; // the size of memory needed
+  int length; // the size of memory needed //TODO: this needs to be rounded up
   int prot;   // read or write flags
   int flags;  // indicates file backed mapping
   int fd;     // file descirptors
@@ -172,6 +173,10 @@ int sys_mmap(void)
       return -1; // Invalid offset
     }
   }
+  // file mappings
+  // data inside mem correspond to a file 
+  // 
+  // EVERYTHING BELOW THIS LINE IS MOVED TO PROC.C
 
   // Address allocation
   uint new_address;
@@ -187,32 +192,7 @@ int sys_mmap(void)
       return -1; // Failed to find an available address
     }
   }
-
-  char* mem = kalloc(); // get the first available page
-
-   if(mem == 0){
-      cprintf("allocuvm out of memory\n");
-      //deallocuvm(pgdir, newsz, oldsz);
-      return 0;
-    }
-    memset(mem, 0, PGSIZE); // sets the pagesize to 0
-    uint va = PGROUNDUP(currproc->sz); // rounds up the current process size 
-    void* valid_va = (void *) find_available_address(); // get a valid address 
-    
-    if (valid_va < (void*)MMAP_AREA_START || valid_va >= (void*)(MMAP_AREA_END)) {
-        cprintf("Generated virtual address is out of range\n");
-        kfree(mem);
-        return 0;
-    }
-
-    if (mappages(currproc->pgdir, valid_va, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0) { // here we map the address to a physical
-        kfree(mem);
-        return 0;
-    }
-
-    currproc->sz = va + PGSIZE; // increase the current process size 
-
-
+  // now we have found the address we can go ahead and add it to the sturct
 
   // Placeholder for file-backed mapping logic
   // ...
@@ -220,17 +200,15 @@ int sys_mmap(void)
   // Add the new mapping to the process's list of mappings
   struct mem_mapping new_mapping;
 
-  new_mapping.addr = valid_va;
+  new_mapping.addr = new_address;
   new_mapping.length = length;
   new_mapping.flags = flags;
   new_mapping.fd = fd;
 
-  curproc->memoryMappings[curproc->num_mappings] = new_mapping;
+  curproc->memoryMappings[curproc->num_mappings] = new_mapping; // add the new mappings to the struct
   curproc->num_mappings++;
 
-  // this is where we need to call mmap
-  // mmap(addr, length, prot, flags, fd, offset);
-  return valid_va;
+  return new_address; // return the new address
 }
 
 // the goal of this function is unmap memory, we need to get args from the user spac e
