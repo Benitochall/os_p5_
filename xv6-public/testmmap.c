@@ -4,9 +4,12 @@
 
 int main(void) 
 {
-    // void * ret= mmap(); 
-    // int * (ret)
-    
-    // printf(1, "The address pointed to by mmap was %d\n", (int *) ret);
+    int addr = 1610612737; // the requested address
+    int length = 4096; // the size of memory needed
+    int prot =0 ; // read or write flags
+    int flags = 0; // indicates file backed mapping 
+    int fd =0 ; // file descirptors 
+    int offset = 0; // the offest into the file
+    mmap((void *)addr, length ,prot, flags, fd, offset);
     exit();
 } 

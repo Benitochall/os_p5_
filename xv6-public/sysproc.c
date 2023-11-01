@@ -94,6 +94,29 @@ sys_uptime(void)
 // program that is defined in proc.c get args from user space
 int sys_mmap(void)
 {
+  void* addr; // the requested address
+  int length; // the size of memory needed
+  int prot; // read or write flags
+  int flags; // indicates file backed mapping 
+  int fd; // file descirptors 
+  int offset; // the offest into the file
+  // struct proc *curproc = myproc();
+
+  if (argint(0, (void*) &addr) < 0 || argint(1, &length) < 0 || argint(2, &prot) < 0 || argint(3, &flags) < 0 || argint(4, &fd) < 0 || argint(5, &offset) < 0) {
+      return -1;
+  }
+
+  cprintf("%d\n", addr);
+  cprintf("%d\n", length);
+  cprintf("%d\n", prot);
+  cprintf("%d\n", flags);
+  cprintf("%d\n", fd);
+  cprintf("%d\n", offset);
+  if (length <= 0 || (int) addr < 0x60000000 || (int) addr > 0x80000000 - PGSIZE || (int)addr % PGSIZE != 0)
+      return -1;
+
+  // this is where we need to call mmap
+  mmap(addr, length, prot, flags, fd, offset); 
   return 0;
 }
 

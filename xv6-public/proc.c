@@ -73,6 +73,7 @@ myproc(void) {
 static struct proc*
 allocproc(void)
 {
+  // here we set up the proc structure
   struct proc *p;
   char *sp;
 
@@ -92,11 +93,13 @@ found:
   release(&ptable.lock);
 
   // Allocate kernel stack.
-  if((p->kstack = kalloc()) == 0){
+  if((p->kstack = kalloc()) == 0){ // here we call kalloc which is going to return 
+    // it returns the first free page of memory
+    // it returns a pointer to a VA
     p->state = UNUSED;
     return 0;
   }
-  sp = p->kstack + KSTACKSIZE;
+  sp = p->kstack + KSTACKSIZE; // this is just incrementing the stack pointer to the top of the stack
 
   // Leave room for trap frame.
   sp -= sizeof *p->tf;
@@ -120,13 +123,17 @@ found:
 void
 userinit(void)
 {
+  // here is the userinit process and it is the first thing that happens
   struct proc *p;
   extern char _binary_initcode_start[], _binary_initcode_size[];
 
-  p = allocproc();
+  p = allocproc(); // 1. allocproc is called 
+  // alloc proc returns the process structure which includes the 
+  // p->kstack which is the kernal stack of the process
   
   initproc = p;
-  if((p->pgdir = setupkvm()) == 0)
+  if((p->pgdir = setupkvm()) == 0) // 3. setupkvm is the next call to investigate
+  // 
     panic("userinit: out of memory?");
   inituvm(p->pgdir, _binary_initcode_start, (int)_binary_initcode_size);
   p->sz = PGSIZE;
@@ -180,6 +187,7 @@ growproc(int n)
 int
 fork(void)
 {
+  // now lets take a look at our new program we have created
   int i, pid;
   struct proc *np;
   struct proc *curproc = myproc();
@@ -536,6 +544,22 @@ procdump(void)
 // I decided to define our user level functions in proc.c as this is where almost everyting happens
 
 void *mmap(void *addr, int length, int prot, int flags, int fd, int offset){
+  // ok in this function we have to get the va of the block of memory using kalloc()
+  // and mappages
+  // kalloc will return the first free page 
+    struct proc *currproc;
+    currproc = myproc(); 
+
+  
+    mem = kalloc(); // this is going to be our first page of memory
+    if(mem == 0){
+      cprintf("allocuvm out of memory\n");
+      //deallocuvm(pgdir, newsz, oldsz);
+      return 0;
+    }
+    memset(mem, 0, PGSIZE);
+    mappages(currproc->pgdir, 0, PGSIZE, V2P(mem), PTE_W|PTE_U);
+  
   return 0; 
 }
 
