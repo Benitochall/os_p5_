@@ -128,7 +128,7 @@ int sys_mmap(void)
   int flags;  // indicates file backed mapping
   int fd;     // file descirptors
   int offset; // the offest into the file
-  // struct proc *curproc = myproc();
+  struct proc *currproc = myproc();
 
   if (argint(0, (void *)&addr) < 0 || argint(1, &length) < 0 || argint(2, &prot) < 0 || argint(3, &flags) < 0 || argint(4, &fd) < 0 || argint(5, &offset) < 0)
   {
@@ -188,17 +188,39 @@ int sys_mmap(void)
     }
   }
 
-  // Placeholder for allocating physical pages and mapping them to virtual addresses
-  // ...
+  char* mem = kalloc(); // get the first available page
+
+   if(mem == 0){
+      cprintf("allocuvm out of memory\n");
+      //deallocuvm(pgdir, newsz, oldsz);
+      return 0;
+    }
+    memset(mem, 0, PGSIZE); // sets the pagesize to 0
+    uint va = PGROUNDUP(currproc->sz); // rounds up the current process size 
+    void* valid_va = (void *) find_available_address(); // get a valid address 
+    
+    if (valid_va < (void*)MMAP_AREA_START || valid_va >= (void*)(MMAP_AREA_END)) {
+        cprintf("Generated virtual address is out of range\n");
+        kfree(mem);
+        return 0;
+    }
+
+    if (mappages(currproc->pgdir, valid_va, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0) { // here we map the address to a physical
+        kfree(mem);
+        return 0;
+    }
+
+    currproc->sz = va + PGSIZE; // increase the current process size 
+
+
 
   // Placeholder for file-backed mapping logic
   // ...
 
   // Add the new mapping to the process's list of mappings
-  struct proc *curproc = myproc();
   struct mem_mapping new_mapping;
 
-  new_mapping.addr = new_address;
+  new_mapping.addr = valid_va;
   new_mapping.length = length;
   new_mapping.flags = flags;
   new_mapping.fd = fd;
@@ -208,7 +230,7 @@ int sys_mmap(void)
 
   // this is where we need to call mmap
   // mmap(addr, length, prot, flags, fd, offset);
-  return new_address;
+  return valid_va;
 }
 
 // the goal of this function is unmap memory, we need to get args from the user spac e
