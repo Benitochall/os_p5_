@@ -59,3 +59,18 @@ struct proc {
 
 void *mmap(void *addr, int length, int prot, int flags, int fd, int offset);
 int munmap(void *addr, int length);
+
+// here create a structure of processes 
+struct mapping_t {
+  int length; 
+  int fd; 
+  int use;
+  int flags[5];
+};
+
+struct mapping_array {
+  unit page; 
+  int dirty; 
+  int use; 
+  int map_index; 
+};

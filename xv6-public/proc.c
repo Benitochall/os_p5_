@@ -547,6 +547,18 @@ void *mmap(void *addr, int length, int prot, int flags, int fd, int offset){
   // ok in this function we have to get the va of the block of memory using kalloc()
   // and mappages
   // kalloc will return the first free page 
+    struct proc *currproc;
+    currproc = myproc(); 
+
+  
+    mem = kalloc(); // this is going to be our first page of memory
+    if(mem == 0){
+      cprintf("allocuvm out of memory\n");
+      //deallocuvm(pgdir, newsz, oldsz);
+      return 0;
+    }
+    memset(mem, 0, PGSIZE);
+    mappages(currproc->pgdir, 0, PGSIZE, V2P(mem), PTE_W|PTE_U);
   
   return 0; 
 }
