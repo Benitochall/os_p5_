@@ -91,6 +91,7 @@ int sys_uptime(void)
 // Function to find an available address
 uint find_available_address(int length)
 {
+  // TODO: at some point need to do guard pages
   struct proc *curproc = myproc();
   uint addr = MMAP_AREA_START;
 

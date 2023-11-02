@@ -198,13 +198,38 @@ fork(void)
     return -1;
   }
 
-  // Copy process state from proc.
-  if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
-    kfree(np->kstack);
-    np->kstack = 0;
-    np->state = UNUSED;
-    return -1;
+  // THIS NEXT SETCTION OF CODE IS THE IMPLEMTATION OF MAPSHARED
+
+  np->num_mappings = curproc->num_mappings; // copy the number of mappings
+  int privateMap =0; 
+
+  for (int i = 0; i < curproc->num_mappings; i++) { // copy all specific mappings from parent to child
+    struct mem_mapping map = curproc->memoryMappings[i];
+    if (map.flags & MAP_PRIVATE){
+      privateMap =1; // this checks if even one of the mmaps is private
+    }
+    np->memoryMappings[i] = map;
   }
+  
+  if (privateMap) {
+    //set up a blank pgdir for the child
+    if((p->pgdir = setupkvm()) == 0){
+      panic("userinit: out of memory?");
+    }
+    
+  }
+  else { // set up the exact save pgdir for the new process 
+    if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
+      kfree(np->kstack);
+      np->kstack = 0;
+      np->state = UNUSED;
+      return -1;
+    }
+  }
+
+  // END SECTION 
+
+  // Copy process state from proc.
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
@@ -218,27 +243,6 @@ fork(void)
   np->cwd = idup(curproc->cwd);
 
   safestrcpy(np->name, curproc->name, sizeof(curproc->name));
-
-  np->num_mappings = curproc->num_mappings; 
-
-  for (int i = 0; i < curproc->num_mappings; i++) {
-        // struct mem_mapping map = curproc->memoryMappings[i];
-        np->memoryMappings[i] = curproc->memoryMappings[i];
-        
-
-        // if (map.flags & MAP_PRIVATE) {
-        //     // Copy the memory region and update the child's page table
-        //     char *mem_copy = kalloc();
-        //     memmove(mem_copy, (char *)map.addr, map.length);
-        //     mappages(np->pgdir, (char *)map.addr, map.length, V2P(mem_copy), PTE_W|PTE_U);
-        // } else if (map.flags & MAP_SHARED) {
-        //     // Just update the child's page table to point to the same physical pages
-        //     mappages(np->pgdir, (char *)map.addr, map.length, V2P((char *)map.addr), PTE_W|PTE_U);
-            
-
-        // }
-    }
-    
 
   pid = np->pid;
 
