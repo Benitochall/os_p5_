@@ -17,7 +17,7 @@ struct mem_mapping {
   int fd;     // File descriptor for file-backed mappings, if applicable
 };
 
-void page_fault_handler(unit addr); // the trap haneler
+void page_fault_handler(uint addr); // the trap handler
 
 extern struct cpu cpus[NCPU];
 extern int ncpu;

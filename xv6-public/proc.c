@@ -6,6 +6,7 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "mmap.h"
 
 struct {
   struct spinlock lock;
@@ -217,6 +218,27 @@ fork(void)
   np->cwd = idup(curproc->cwd);
 
   safestrcpy(np->name, curproc->name, sizeof(curproc->name));
+
+  np->num_mappings = curproc->num_mappings; 
+
+  for (int i = 0; i < curproc->num_mappings; i++) {
+        // struct mem_mapping map = curproc->memoryMappings[i];
+        np->memoryMappings[i] = curproc->memoryMappings[i];
+        
+
+        // if (map.flags & MAP_PRIVATE) {
+        //     // Copy the memory region and update the child's page table
+        //     char *mem_copy = kalloc();
+        //     memmove(mem_copy, (char *)map.addr, map.length);
+        //     mappages(np->pgdir, (char *)map.addr, map.length, V2P(mem_copy), PTE_W|PTE_U);
+        // } else if (map.flags & MAP_SHARED) {
+        //     // Just update the child's page table to point to the same physical pages
+        //     mappages(np->pgdir, (char *)map.addr, map.length, V2P((char *)map.addr), PTE_W|PTE_U);
+            
+
+        // }
+    }
+    
 
   pid = np->pid;
 
@@ -556,9 +578,9 @@ void page_fault_handler(uint va){
   
   for (int i = 0; i < num_mappings; i++) {
     // now I need to get the specific mapping at I
-    struct mem_mapping *map = currproc->memoryMappings[i];
+    struct mem_mapping map = currproc->memoryMappings[i];
 
-    if (va >= map->addr && va < PGROUNDUP(map->addr + map->length)) { // rounds up the to the next page
+    if (va >= map.addr && va < PGROUNDUP(map.addr + map.length)) { // rounds up the to the next page
         char *mem = kalloc(); // grab the next avaiblable page
         if (mem == 0) {
             panic("out of memory\n");
@@ -581,10 +603,10 @@ void page_fault_handler(uint va){
 
 }
 
-void *mmap(void *addr, int length, int prot, int flags, int fd, int offset){
-    return
-}
+// void *mmap(void *addr, int length, int prot, int flags, int fd, int offset){
+//     return;
+// }
 
-int munmap(void *addr, int length){
-  return 0; 
-}
+// int munmap(void *addr, int length){
+//   return 0; 
+// }

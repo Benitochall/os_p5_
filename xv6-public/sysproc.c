@@ -168,10 +168,10 @@ int sys_mmap(void)
     {
       return -1; // Invalid file descriptor
     }
-    if (offset < 0 || offset >= file_size(myproc()->ofile[fd]))
-    {
-      return -1; // Invalid offset
-    }
+    // if (offset < 0 || offset >= file_size(myproc()->ofile[fd]))
+    // {
+    //   return -1; // Invalid offset
+    // }
   }
   // file mappings
   // data inside mem correspond to a file 
@@ -180,7 +180,7 @@ int sys_mmap(void)
 
   // Address allocation
   uint new_address;
-  if (flags & MAP_FIXED)
+  if (flags & MAP_FIXED) // map to a fixed address 
   {
     new_address = (uint)addr;
   }
@@ -228,8 +228,8 @@ int sys_mmap(void)
   new_mapping.flags = flags;
   new_mapping.fd = fd;
 
-  curproc->memoryMappings[curproc->num_mappings] = new_mapping; // add the new mappings to the struct
-  curproc->num_mappings++;
+  currproc->memoryMappings[currproc->num_mappings] = new_mapping; // add the new mappings to the struct
+  currproc->num_mappings++;
 
   return new_address; // return the new address
 }
