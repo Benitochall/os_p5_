@@ -168,10 +168,10 @@ int sys_mmap(void)
     {
       return -1; // Invalid file descriptor
     }
-    if (offset < 0 || offset >= file_size(myproc()->ofile[fd]))
-    {
-      return -1; // Invalid offset
-    }
+    // if (offset < 0 || offset >= file_size(myproc()->ofile[fd]))
+    // {
+    //   return -1; // Invalid offset
+    // }
   }
   // file mappings
   // data inside mem correspond to a file 
@@ -180,7 +180,7 @@ int sys_mmap(void)
 
   // Address allocation
   uint new_address;
-  if (flags & MAP_FIXED)
+  if (flags & MAP_FIXED) // map to a fixed address 
   {
     new_address = (uint)addr;
   }
@@ -196,6 +196,29 @@ int sys_mmap(void)
 
   // Placeholder for file-backed mapping logic
   // ...
+//   if (!(flags & MAP_ANONYMOUS)) {
+//   struct file *f = myproc()->ofile[fd];
+//   char *mem = kalloc();  // Allocate one page frame from the kernel
+//   if (mem == 0) {
+//     return -1;  // Allocation failed
+//   }
+
+//   // Read file content into the memory
+//   ilock(f->ip);
+//   int n = readi(f->ip, mem, offset, PGSIZE);
+//   iunlock(f->ip);
+
+//   if (n < 0) {
+//     kfree(mem);  // Free the allocated memory if read failed
+//     return -1;
+//   }
+
+//   // Map this memory to the virtual address in the process's address space
+//   if (mappages(myproc()->pgdir, (char *)new_address, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0) {
+//     kfree(mem);  // Free the allocated memory if mapping failed
+//     return -1;
+//   }
+// }
 
   // Add the new mapping to the process's list of mappings
   struct mem_mapping new_mapping;
@@ -205,8 +228,8 @@ int sys_mmap(void)
   new_mapping.flags = flags;
   new_mapping.fd = fd;
 
-  curproc->memoryMappings[curproc->num_mappings] = new_mapping; // add the new mappings to the struct
-  curproc->num_mappings++;
+  currproc->memoryMappings[currproc->num_mappings] = new_mapping; // add the new mappings to the struct
+  currproc->num_mappings++;
 
   return new_address; // return the new address
 }
