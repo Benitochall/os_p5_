@@ -5,8 +5,13 @@
 #include "param.h"
 #include "memlayout.h"
 #include "mmu.h"
+#include "param.h"
 #include "proc.h"
 #include "mmap.h"
+#include "spinlock.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "file.h"
 
 #define MMAP_AREA_START 0x60000000
 #define MMAP_AREA_END 0x80000000
@@ -144,11 +149,17 @@ int sys_mmap(void)
   cprintf("%d\n", flags);
   cprintf("%d\n", fd);
   cprintf("%d\n", offset);
-  
-  if (addr && (length <= 0 || (int)addr < 0x60000000 || (int)addr > 0x80000000 - PGSIZE || (int)addr % PGSIZE != 0)){
-    cprintf("Failed 2\n");
+
+  if (length <=0) {
     return -1;
   }
+  
+  if (addr){
+    if ((int)addr < (int)MMAP_AREA_START || (int)addr > (int)(MMAP_AREA_END - PGSIZE) || (int)addr % PGSIZE != 0){
+      return -1; 
+      
+      }
+    }
     
 
   // At least one of MAP_SHARED or MAP_PRIVATE should be specified. Also, if MAP_ANONYMOUS is set, then fd should be -1 and offset should be 0.
@@ -204,46 +215,6 @@ int sys_mmap(void)
   }
   // now we have found the address we can go ahead and add it to the sturct
 
-if (!(flags & MAP_ANONYMOUS)) {
-  struct file *f = myproc()->ofile[fd];
-  uint current_addr = new_address;
-  int total_read = 0; // Total bytes read from the file
-
-  for (int i = 0; i < length; i += PGSIZE) {
-    char *mem = kalloc(); // Allocate one page frame from the kernel
-    if (mem == 0) {
-      // Handle error: free any previously allocated pages
-      return -1; // Allocation failed
-    }
-
-    memset(mem, 0, PGSIZE);
-
-    // Read file content into the memory
-    int read_bytes = fileread(f, mem, PGSIZE);
-    if (read_bytes < 0) {
-      kfree(mem); // Free the allocated memory if read failed
-      // Handle error: free any previously allocated pages
-      return -1;
-    }
-    total_read += read_bytes;
-
-    // If we read less than PGSIZE, we've hit EOF; don't try to read more.
-    if (read_bytes < PGSIZE) break;
-
-    // Map this memory to the virtual address in the process's address space
-    if (mappages(myproc()->pgdir, (char *)current_addr, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0) {
-      kfree(mem); // Free the allocated memory if mapping failed
-      // Handle error: free any previously allocated pages
-      return -1;
-    }
-
-    current_addr += PGSIZE;
-  }
-}
-
-
-
-  // Add the new mapping to the process's list of mappings
   struct mem_mapping new_mapping;
 
   new_mapping.addr = new_address;
@@ -259,8 +230,8 @@ if (!(flags & MAP_ANONYMOUS)) {
 
 // the goal of this function is unmap memory, we need to get args from the user spac e
 int sys_munmap(void) {
-  void *addr;
-  int length;
+  void *addr; // this is the address we need to get
+  int length; // we are not doing partial unmappings 
   struct proc *curproc = myproc();
   
   // Retrieve the arguments from the system call.
@@ -268,40 +239,61 @@ int sys_munmap(void) {
     return -1;
   }
 
-  // Round length up to the nearest page boundary.
-  length = PGROUNDUP(length);
   
   // Iterate over the mappings and find the mapping for the given address.
   for (int i = 0; i < curproc->num_mappings; i++) {
-    struct mem_mapping *m = &curproc->memoryMappings[i];
-    if ((uint)addr >= m->addr && (uint)addr + length <= m->addr + m->length) {
+    // may need to walk the page directory
+    struct mem_mapping *map = &curproc->memoryMappings[i];
+    if ((uint)addr >= map->addr && (uint)addr + length <= map->addr + map->length) {
       // If the mapping is file-backed with the MAP_SHARED flag, write it back to the file.
-      if ((m->flags & MAP_SHARED) && !(m->flags & MAP_ANONYMOUS) && m->fd >= 0) {
-        struct file *f = curproc->ofile[m->fd];
-        if (f) {
-          // Write back to the file from addr up to the length of the mapping.
-          filewrite(f, (char *)addr, length);
-        }
+      if ((map->flags & MAP_SHARED) && !(map->flags & MAP_ANONYMOUS) && map->fd >= 0) {
+       
+        // the specific file needs to be mapped out
+        struct file *f = curproc->ofile[map->fd]; // this is the file we need to write to 
+        // we need dump the file into a buffer
+        uint va = map->addr; 
+        while (va < PGROUNDUP(map->addr + map->length)){
+          pte_t *pte;
+          pte = walkpgdir(myproc()->pgdir, (void *)va, 0); // gets the page table entry
+
+          if(!pte || !(*pte & PTE_P)){
+            return -1; 
+          }
+          char *pa = P2V(PTE_ADDR(*pte));  // gets the physical address
+          char buffer[PGSIZE]; 
+          // Copy data from physical address 'pa' to the buffer
+          memmove(buffer, pa, PGSIZE);
+
+
+
+          struct inode *ip = f->ip;
+          
+          uint offset_into_file = va - map->addr; 
+
+          begin_op();
+          ilock(ip);
+
+          int written_bytes = writei(ip, buffer, offset_into_file, PGSIZE);
+          cprintf("Made it here2\n"); 
+
+          iunlock(ip); 
+          end_op(); 
+
+         if (written_bytes < 0) {
+            return -1;
+          }
+          // now we need to increment the va
+          va+=PGSIZE; 
+          }
       }
+    }
 
-      // Since we're using lazy allocation, we don't actually free pages here.
-      // Instead, we just remove the mapping so that future accesses will fault.
-
-      // Remove the mapping from the process's virtual address space.
-      //uvmunmap(curproc->pgdir, (uint)addr, length / PGSIZE, 1);
-
-      // // Remove the mapping from the process's list of mappings.
-      // m->addr = 0;
-      // m->length = 0;
-      // Shift the rest of the mappings down if necessary.
-      for (int k = i; k < curproc->num_mappings - 1; k++) {
-        curproc->memoryMappings[k] = curproc->memoryMappings[k + 1];
-      }
+    for (int k = i; k < curproc->num_mappings - 1; k++) {
+      curproc->memoryMappings[k] = curproc->memoryMappings[k + 1];
+    }
       curproc->num_mappings--;
 
       break; // Exit the loop after handling the found mapping.
-    }
   }
-
-  return 0;
+    return 0;
 }

@@ -1,12 +1,15 @@
 #include "types.h"
+#include "mmu.h"
 #include "defs.h"
 #include "param.h"
 #include "memlayout.h"
-#include "mmu.h"
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
 #include "mmap.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "file.h"
 
 struct {
   struct spinlock lock;
@@ -573,6 +576,7 @@ procdump(void)
 // I decided to define our user level functions in proc.c as this is where almost everyting happens
 
 void page_fault_handler(uint va){
+  struct file *f;
   
   /* Case 1 - Lazy Allocation */
   // go throgh kalloc routine
@@ -587,7 +591,54 @@ void page_fault_handler(uint va){
     // now I need to get the specific mapping at I
     struct mem_mapping map = currproc->memoryMappings[i];
 
-    if (va >= map.addr && va < PGROUNDUP(map.addr + map.length)) { // rounds up the to the next page
+    if (va >= map.addr && va < PGROUNDUP(map.addr + map.length)) { 
+      // rounds up the to the next page
+      // map is our current mapping
+      if (!(map.flags & MAP_ANONYMOUS)) { // here we need to per
+        f = currproc->ofile[map.fd]; // here is specific file we want to open
+
+        if (f == 0) {
+          // Handle error: Invalid file descriptor
+          panic("mapping failed");
+        }
+
+        
+        uint page_in_file = PGROUNDDOWN(va); // this is the page aligned 
+        uint offset_into_file = page_in_file - map.addr; // this is were we want to grab the data in the file
+
+        char *mem = kalloc(); 
+        if (mem == 0) {
+          // Handle error: free any previously allocated pages
+          panic("mapping failed"); // Allocation failed
+        }
+          memset(mem, 0, PGSIZE);
+
+          // now we need to read the contents of the file 
+          struct inode *ip = f->ip;
+
+          char buffer[PGSIZE]; // Create a buffer to hold the read data
+          begin_op();
+          ilock(ip);
+
+          // Attempt to read 1024 bytes from offset offset_into_file of the file
+          int read_bytes = readi(ip, buffer, offset_into_file, sizeof(buffer));
+          iunlock(ip); 
+          end_op(); 
+
+          if (read_bytes < 0) {
+              panic("mapping failed");
+          } else {
+            memmove(mem, buffer, PGSIZE);
+            if (mappages(currproc->pgdir, (char *)va, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0) {
+              kfree(mem); // Free the allocated memory if mapping failed
+              panic("mapping failed");
+            }
+          }
+          return; 
+      }
+
+      // this is when we dont have a file
+      else {
         char *mem = kalloc(); // grab the next avaiblable page
         if (mem == 0) {
             panic("out of memory\n");
@@ -599,12 +650,13 @@ void page_fault_handler(uint va){
             panic("mapping failed");
         }
         return;
-    }
+        }
+      }
   }
 
   /* Case 2 - MAP_GROWSUP */
   /* Case 3 - None of the Above - Error */
-  cprintf("Segmentation Fault\n");
+  //cprintf("Segmentation Fault\n");
   //kill_the_process() 
 
 
