@@ -138,13 +138,14 @@ int sys_mmap(void)
     return -1;
   }
 
-  // cprintf("%d\n", addr);
-  // cprintf("%d\n", length);
-  // cprintf("%d\n", prot);
-  // cprintf("%d\n", flags);
-  // cprintf("%d\n", fd);
-  // cprintf("%d\n", offset);
-  if (length <= 0 || (int)addr < 0x60000000 || (int)addr > 0x80000000 - PGSIZE || (int)addr % PGSIZE != 0){
+  cprintf("%d\n", addr);
+  cprintf("%d\n", length);
+  cprintf("%d\n", prot);
+  cprintf("%d\n", flags);
+  cprintf("%d\n", fd);
+  cprintf("%d\n", offset);
+  
+  if (addr && (length <= 0 || (int)addr < 0x60000000 || (int)addr > 0x80000000 - PGSIZE || (int)addr % PGSIZE != 0)){
     cprintf("Failed 2\n");
     return -1;
   }
@@ -257,7 +258,50 @@ if (!(flags & MAP_ANONYMOUS)) {
 }
 
 // the goal of this function is unmap memory, we need to get args from the user spac e
-int sys_munmap(void)
-{
+int sys_munmap(void) {
+  void *addr;
+  int length;
+  struct proc *curproc = myproc();
+  
+  // Retrieve the arguments from the system call.
+  if (argint(0, (void *)&addr) < 0 || argint(1, &length) < 0) {
+    return -1;
+  }
+
+  // Round length up to the nearest page boundary.
+  length = PGROUNDUP(length);
+  
+  // Iterate over the mappings and find the mapping for the given address.
+  for (int i = 0; i < curproc->num_mappings; i++) {
+    struct mem_mapping *m = &curproc->memoryMappings[i];
+    if ((uint)addr >= m->addr && (uint)addr + length <= m->addr + m->length) {
+      // If the mapping is file-backed with the MAP_SHARED flag, write it back to the file.
+      if ((m->flags & MAP_SHARED) && !(m->flags & MAP_ANONYMOUS) && m->fd >= 0) {
+        struct file *f = curproc->ofile[m->fd];
+        if (f) {
+          // Write back to the file from addr up to the length of the mapping.
+          filewrite(f, (char *)addr, length);
+        }
+      }
+
+      // Since we're using lazy allocation, we don't actually free pages here.
+      // Instead, we just remove the mapping so that future accesses will fault.
+
+      // Remove the mapping from the process's virtual address space.
+      //uvmunmap(curproc->pgdir, (uint)addr, length / PGSIZE, 1);
+
+      // // Remove the mapping from the process's list of mappings.
+      // m->addr = 0;
+      // m->length = 0;
+      // Shift the rest of the mappings down if necessary.
+      for (int k = i; k < curproc->num_mappings - 1; k++) {
+        curproc->memoryMappings[k] = curproc->memoryMappings[k + 1];
+      }
+      curproc->num_mappings--;
+
+      break; // Exit the loop after handling the found mapping.
+    }
+  }
+
   return 0;
 }

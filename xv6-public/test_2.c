@@ -12,13 +12,19 @@ int main() {
 
     /* mmap anon memory */
     void *mem = mmap((void *)addr, len, prot, flags, fd, 0);
-    printf(1, "mem: %p\n", mem); 
     if (mem == (void *)-1) {
 	    goto failed;
     }
     if (mem != (void *)addr) {
 	    goto failed;
     } 
+
+
+    /* Clean and return */
+    int ret = munmap(mem, len);
+    if (ret < 0) {
+	    goto failed;
+    }
 
 // success:
     printf(1, "MMAP\t SUCCESS\n");

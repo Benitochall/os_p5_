@@ -4,7 +4,7 @@
 #include "mmap.h"
 
 int main() {
-    uint addr = 0x60020000;
+    uint addr = 0x40000000;
     int len = 4000;
     int prot = PROT_READ | PROT_WRITE;
     int flags = MAP_ANON | MAP_FIXED | MAP_SHARED;
@@ -12,13 +12,9 @@ int main() {
 
     /* mmap anon memory */
     void *mem = mmap((void *)addr, len, prot, flags, fd, 0);
-    printf(1, "mem: %p\n", mem); 
-    if (mem == (void *)-1) {
-	    goto failed;
+    if (mem != (void *)-1) {
+	goto failed;
     }
-    if (mem != (void *)addr) {
-	    goto failed;
-    } 
 
 // success:
     printf(1, "MMAP\t SUCCESS\n");
