@@ -203,31 +203,44 @@ int sys_mmap(void)
   }
   // now we have found the address we can go ahead and add it to the sturct
 
-  // Placeholder for file-backed mapping logic
-  // ...
-//   if (!(flags & MAP_ANONYMOUS)) {
-//   struct file *f = myproc()->ofile[fd];
-//   char *mem = kalloc();  // Allocate one page frame from the kernel
-//   if (mem == 0) {
-//     return -1;  // Allocation failed
-//   }
+if (!(flags & MAP_ANONYMOUS)) {
+  struct file *f = myproc()->ofile[fd];
+  uint current_addr = new_address;
+  int total_read = 0; // Total bytes read from the file
 
-//   // Read file content into the memory
-//   ilock(f->ip);
-//   int n = readi(f->ip, mem, offset, PGSIZE);
-//   iunlock(f->ip);
+  for (int i = 0; i < length; i += PGSIZE) {
+    char *mem = kalloc(); // Allocate one page frame from the kernel
+    if (mem == 0) {
+      // Handle error: free any previously allocated pages
+      return -1; // Allocation failed
+    }
 
-//   if (n < 0) {
-//     kfree(mem);  // Free the allocated memory if read failed
-//     return -1;
-//   }
+    memset(mem, 0, PGSIZE);
 
-//   // Map this memory to the virtual address in the process's address space
-//   if (mappages(myproc()->pgdir, (char *)new_address, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0) {
-//     kfree(mem);  // Free the allocated memory if mapping failed
-//     return -1;
-//   }
-// }
+    // Read file content into the memory
+    int read_bytes = fileread(f, mem, PGSIZE);
+    if (read_bytes < 0) {
+      kfree(mem); // Free the allocated memory if read failed
+      // Handle error: free any previously allocated pages
+      return -1;
+    }
+    total_read += read_bytes;
+
+    // If we read less than PGSIZE, we've hit EOF; don't try to read more.
+    if (read_bytes < PGSIZE) break;
+
+    // Map this memory to the virtual address in the process's address space
+    if (mappages(myproc()->pgdir, (char *)current_addr, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0) {
+      kfree(mem); // Free the allocated memory if mapping failed
+      // Handle error: free any previously allocated pages
+      return -1;
+    }
+
+    current_addr += PGSIZE;
+  }
+}
+
+
 
   // Add the new mapping to the process's list of mappings
   struct mem_mapping new_mapping;
