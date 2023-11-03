@@ -213,7 +213,7 @@ fork(void)
   
   if (privateMap) {
     //set up a blank pgdir for the child
-    if((p->pgdir = setupkvm()) == 0){
+    if((np->pgdir = setupkvm()) == 0){
       panic("userinit: out of memory?");
     }
     
@@ -294,6 +294,9 @@ exit(void)
         wakeup1(initproc);
     }
   }
+  // clear out memory of 
+  memset(curproc->memoryMappings, 0, sizeof(struct mem_mapping) * 32);
+  curproc->num_mappings = 0;
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
