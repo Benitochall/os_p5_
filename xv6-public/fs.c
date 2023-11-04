@@ -53,7 +53,7 @@ bzero(int dev, int bno)
 // Blocks.
 
 // Allocate a zeroed disk block.
-static uint
+uint
 balloc(uint dev)
 {
   int b, bi, m;

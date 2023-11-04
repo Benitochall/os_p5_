@@ -188,11 +188,35 @@ int sys_mmap(void)
       cprintf("Failed 5\n");
       return -1; // Invalid file descriptor
     }
-    // if (offset < 0 || offset >= file_size(myproc()->ofile[fd]))
-    // {
-    //   return -1; // Invalid offset
-    // }
+    // struct file* f = currproc->ofile[fd];
+    // struct inode *ip;
+    // ip = f->ip;
+    // cprintf("file size%d\n", ip->size); 
+    // int new_size = 4096;
+    // begin_op(); 
+    //     if (new_size > ip->size) {
+    //     // Calculate the number of additional blocks needed
+    //     int additional_blocks = (new_size - ip->size + BSIZE - 1) / BSIZE;
+
+    //     // Allocate additional blocks
+    //     for (int i = 0; i < additional_blocks; i++) {
+    //         if (balloc(ip->dev) < 0) {
+    //             panic("balloc");
+    //         }
+    //     }
+
+    //     // Update inode size
+    //     ip->size = new_size;
+
+    //     // Write updated inode back to disk
+    //     iupdate(ip);
+    //     }
+    //     end_op(); 
+        
+    //     cprintf("New file size: %d\n", ip->size);
+
   }
+   
   // file mappings
   // data inside mem correspond to a file 
   // 
@@ -233,10 +257,11 @@ int sys_mmap(void)
   new_mapping.length = length;
   new_mapping.flags = flags;
   new_mapping.fd = fd;
+  new_mapping.originalLength = length; 
 
   currproc->memoryMappings[currproc->num_mappings] = new_mapping; // add the new mappings to the struct
   currproc->num_mappings++;
-  cprintf("%d\n", new_address);
+  cprintf("%x\n", new_address);
   return new_address; // return the new address
 }
 
@@ -245,6 +270,7 @@ int sys_munmap(void) {
   void *addr; // this is the address we need to get
   int length; // we are not doing partial unmappings 
   struct proc *curproc = myproc();
+  struct file *f;
   
   // Retrieve the arguments from the system call.
   if (argint(0, (void *)&addr) < 0 || argint(1, &length) < 0) {
@@ -259,39 +285,46 @@ int sys_munmap(void) {
     if ((uint)addr >= map->addr && (uint)addr + length <= map->addr + map->length) {
       // If the mapping is file-backed with the MAP_SHARED flag, write it back to the file.
       if ((map->flags & MAP_SHARED) && !(map->flags & MAP_ANONYMOUS) && map->fd >= 0) {
-       
-        // the specific file needs to be mapped out
-        struct file *f = curproc->ofile[map->fd]; // this is the file we need to write to 
+          cprintf("the number of mappings are %d\n", curproc->num_mappings);
+          f = curproc->ofile[map->fd];
+          if (f == 0)
+            {
+              // Handle error: Invalid file descriptor
+              panic("mapping failed 1");
+            }
+          struct inode *ip = f->ip;
+          cprintf("file size %d\n", ip->size); 
         // we need dump the file into a buffer
         uint va = map->addr; 
-        while (va < PGROUNDUP(map->addr + map->length)){
+        cprintf("trying to access %x\n", va); 
+        while (va < PGROUNDUP(map->addr + map->length) && (va - map->addr) < ip->size){
           pte_t *pte;
+
           pte = walkpgdir(myproc()->pgdir, (void *)va, 0); // gets the page table entry
 
           if(!pte || !(*pte & PTE_P)){
+            // if the address is not found but it is in the copy uvm 
+            cprintf("something wrong with pte\n"); 
             return -1; 
           }
           char *pa = P2V(PTE_ADDR(*pte));  // gets the physical address
           char buffer[PGSIZE]; 
           // Copy data from physical address 'pa' to the buffer
           memmove(buffer, pa, PGSIZE);
-
-
-
-          struct inode *ip = f->ip;
           
           uint offset_into_file = va - map->addr; 
 
           begin_op();
           ilock(ip);
-
           int written_bytes = writei(ip, buffer, offset_into_file, PGSIZE);
+
           cprintf("Made it here2\n"); 
 
           iunlock(ip); 
           end_op(); 
 
          if (written_bytes < 0) {
+            cprintf(" write bytes is negative\n");
             return -1;
           }
           // now we need to increment the va

@@ -15,9 +15,10 @@ struct mem_mapping {
   int length; // Length of the mapping in bytes
   int flags;  // Flags as passed to mmap (e.g., MAP_FIXED, MAP_ANONYMOUS, etc.)
   int fd;     // File descriptor for file-backed mappings, if applicable
+  int originalLength; 
 };
 
-void page_fault_handler(uint addr); // the trap handler
+int page_fault_handler(uint addr); // the trap handler
 
 extern struct cpu cpus[NCPU];
 extern int ncpu;

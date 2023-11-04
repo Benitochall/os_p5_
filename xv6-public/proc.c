@@ -230,8 +230,10 @@ int fork(void)
   }
   else
   { // set up the exact save pgdir for the new process
+    cprintf("copying the forked process to child\n"); 
     if ((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0)
     {
+      cprintf("copy uvm failed\n"); 
       kfree(np->kstack);
       np->kstack = 0;
       np->state = UNUSED;
@@ -550,6 +552,21 @@ int kill(int pid)
   return -1;
 }
 
+int count_children(struct proc* parent_proc) {
+    struct proc* p;
+    int count = 0;
+    
+    acquire(&ptable.lock);
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+        if(p->parent == parent_proc) {
+            count++;
+        }
+    }
+    release(&ptable.lock);
+    
+    return count;
+}
+
 // PAGEBREAK: 36
 //  Print a process listing to console.  For debugging.
 //  Runs when user types ^P on console.
@@ -589,15 +606,17 @@ void procdump(void)
 
 // I decided to define our user level functions in proc.c as this is where almost everyting happens
 
-void page_fault_handler(uint va)
+int page_fault_handler(uint va)
 {
-  struct file *f;
+  struct file *f = 0;
+  struct inode *ip = 0;
 
   cprintf("Page fault at %p\n", va);
 
   /* Case 1 - Lazy Allocation */
   // go throgh kalloc routine
   struct proc *currproc = myproc(); // get the current process
+  
 
   // get the number of array of mappings
   int num_mappings = currproc->num_mappings;
@@ -606,195 +625,119 @@ void page_fault_handler(uint va)
 
   for (int i = 0; i < num_mappings; i++)
   {
+
     // now I need to get the specific mapping at I
     struct mem_mapping map = currproc->memoryMappings[i];
-    cprintf("map.addr: %p\n", map.addr);
     cprintf("map.length: %d\n", map.length);
 
     if (va >= map.addr && va < PGROUNDUP(map.addr + map.length))
     {
-      
-      // rounds up the to the next page
-      // map is our current mapping
-      if (!(map.flags & MAP_ANONYMOUS))
-      {
-        cprintf("make it her1e\n");
-        if (map.flags & MAP_GROWSUP)
-        {
-          cprintf("make it here\n");
-          uint end_of_mapping = PGROUNDUP(map.addr + map.length) + PGSIZE; // this is going to get end of our mapping
-          uint next_mapping_start = 0xFFFFFFFF;
-          cprintf("Testing 2\n");
-          for (int j = 0; j < num_mappings; j++)
-          {
-            if (currproc->memoryMappings[j].addr > end_of_mapping &&
-                currproc->memoryMappings[j].addr < next_mapping_start)
-            {
-              next_mapping_start = currproc->memoryMappings[j].addr; // this sets the next mapping start to be in the right place
-              break;
-            }
-            cprintf("Testing 3\n");
-          }
-          if (PGSIZE >= next_mapping_start - end_of_mapping)
-          {
-            cprintf("Touched guard page\n");
-            break;
-          }
-
-          map.length = PGROUNDUP(map.length) + PGSIZE; 
-          cprintf("map.length: %d\n", map.length);
-
-        }                            // here we need to per
-        f = currproc->ofile[map.fd]; // here is specific file we want to open
-
-        if (f == 0)
+      if (map.fd >0){
+        f = currproc->ofile[map.fd];
+      if (f == 0)
         {
           // Handle error: Invalid file descriptor
           panic("mapping failed 1");
         }
+        ip = f->ip;
+      cprintf("file size%d\n", ip->size); 
+
+
+      }
+
+      
+      int file_backed =0; 
+      char *mem = kalloc();
+      if (mem == 0)
+      {
+        // Handle error: free any previously allocated pages
+        panic("mapping failed 2"); // Allocation failed
+      }
+
+      // the first check we want to do is check to see if it is Map_grows up
+      if ((map.flags & MAP_GROWSUP)){
+        uint end_of_mapping = PGROUNDUP(map.addr + map.length) + PGSIZE; // this is going to get end of our mapping
+        uint next_mapping_start = 0xFFFFFFFF;
+
+        for (int j = 0; j < num_mappings; j++)
+        {
+          
+          if (currproc->memoryMappings[j].addr >= end_of_mapping &&
+              currproc->memoryMappings[j].addr < next_mapping_start)
+          {
+            next_mapping_start = currproc->memoryMappings[j].addr; // this sets the next mapping start to be in the right place
+            
+            break;
+          }
+        }
+        if (PGSIZE >= next_mapping_start - end_of_mapping)
+        {
+          break;
+        }
+
+        currproc->memoryMappings[i].length += (int)PGSIZE; 
+
+        // if not mapped anonomous we need to incrment the file size
+
+        cprintf("map length %d\n", currproc->memoryMappings[i].length); 
+
+      }
+
+      if (!(map.flags & MAP_ANONYMOUS)){ // this is the case where we are mapping from a file
+        file_backed = 1; 
 
         uint page_in_file = PGROUNDDOWN(va);                      // this is the page aligned
         int offset_into_file = (int)page_in_file - (int)map.addr; // this is were we want to grab the data in the file
 
         cprintf("Offset into file: %d\n", offset_into_file);
 
-        char *mem = kalloc();
-        if (mem == 0)
-        {
-          // Handle error: free any previously allocated pages
-          panic("mapping failed 2"); // Allocation failed
-        }
-        memset(mem, 0, PGSIZE);
+
+        // we need to only map non guard pages 
+        // if (offset_into_file > map.originalLength){
+        //   cprintf("offset greater than lentgh\n"); 
+        //   // we still want to allocate it with memory
+        //   file_backed =0; 
+        // }
+        // if (offset_into_file >=  PGROUNDUP(map.length) - map.guardPages * PGSIZE){
+        //   // dont map 
+        //   return; 
+        // }
 
         // now we need to read the contents of the file
-        struct inode *ip = f->ip;
+        if (file_backed){
 
-        char buffer[PGSIZE]; // Create a buffer to hold the read data
-        begin_op();
-        ilock(ip);
+          char buffer[PGSIZE]; // Create a buffer to hold the read data
+          begin_op();
+          ilock(ip);
+          // if it is a guard page do not read
 
-        int read_bytes = readi(ip, buffer, offset_into_file, sizeof(buffer));
-        iunlock(ip);
-        end_op();
+          int read_bytes = readi(ip, buffer, offset_into_file, PGSIZE);
+          read_bytes++; 
+          iunlock(ip);
+          end_op();
 
-        if (read_bytes < 0)
-        {
-          panic("mapping failed 3");
-        }
-        else
-        {
-          memmove(mem, buffer, PGSIZE);
-          if (mappages(currproc->pgdir, (char *)va, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0)
+          if (read_bytes < 0)
           {
-            kfree(mem); // Free the allocated memory if mapping failed
-            panic("mapping failed 4");
+            panic("mapping failed 3");
+          }
+          else {
+            memmove(mem, buffer, PGSIZE);
           }
         }
-        return;
       }
-      else if ((map.flags & MAP_GROWSUP))
-      {
-        cprintf("Testing 1\n");
-        uint end_of_mapping = PGROUNDUP(map.addr + map.length) + PGSIZE; // this is going to get end of our mapping
-        uint next_mapping_start = 0xFFFFFFFF;
-        cprintf("Testing 2\n");
-        for (int j = 0; j < num_mappings; j++)
-        {
-          if (currproc->memoryMappings[j].addr > end_of_mapping &&
-              currproc->memoryMappings[j].addr < next_mapping_start)
-          {
-            next_mapping_start = currproc->memoryMappings[j].addr; // this sets the next mapping start to be in the right place
-            break;
-          }
-          cprintf("Testing 3\n");
-        }
-        if (PGSIZE >= next_mapping_start - end_of_mapping)
-        {
-          cprintf("Touched guard page\n");
-          break;
-        }
-
-        map.length += PGSIZE; // incremeted our page length
-        char *mem = kalloc(); // grab physical
-        if (mem == 0)
-        {
-          panic("Out of memory\n");
-        }
-        memset(mem, 0, PGSIZE);
-        if (mappages(currproc->pgdir, (char *)va, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0)
-        {
-          kfree(mem);
-          panic("Mapping failed 5");
-        }
-        cprintf("Testing 4\n");
-        return;
-        cprintf("Testing 5\n");
-      }
-      // this is when we dont have a file
-      else
-      {
-        char *mem = kalloc(); // grab the next avaiblable page
-        if (mem == 0)
-        {
-          panic("out of memory\n");
-        }
-        // the virutal address is automatically rounded down to the nearest page
+      if (!file_backed){
+        cprintf("we have a non file backed\n");
         memset(mem, 0, PGSIZE); // zero out the page
-        if (mappages(currproc->pgdir, (char *)va, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0)
-        { // map the page to physical address
-          kfree(mem);
-          panic("mapping failed 6");
-        }
-        return;
+      }
+
+      if (mappages(currproc->pgdir, (char *)va, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0){ // map the page to physical address
+        kfree(mem);
+      }
+        file_backed =0; 
+        return 1;
       }
     }
-  }
 
   cprintf("Segmentation Fault\n");
-  kill(currproc->pid);
+  return -1; 
 }
-
-//   /* Case 2 - MAP_GROWSUP */
-
-//   uint end_of_mapping = PGROUNDUP(m->addr + m->length);
-//   // Initialize with the max address or the start of the next mapping.
-
-//   // Find the start of the next mapping if it exists.
-
-//   // Check if the faulting address is on the guard page.
-//   if ((m->flags & MAP_GROWSUP) && va == end_of_mapping)
-//   {
-//     // Check if there's space to grow.
-//     if (end_of_mapping + PGSIZE >= next_mapping_start)
-//     {
-//       // No space to grow. Handle error.
-//       panic("No space to grow mapping");
-//     }
-
-//     // Allocate a new page and map it.
-//     char *mem = kalloc();
-//     if (mem == 0)
-//     {
-//       panic("Out of memory\n");
-//     }
-//     memset(mem, 0, PGSIZE);
-//     if (mappages(currproc->pgdir, (char *)end_of_mapping, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0)
-//     {
-//       kfree(mem);
-//       panic("Mapping failed");
-//     }
-
-//     // Update the mapping length.
-//     m->length += PGSIZE;
-//     return; // Successfully handled the fault.
-//   }
-// }
-/* Case 3 - None of the Above - Error */
-
-// void *mmap(void *addr, int length, int prot, int flags, int fd, int offset){
-//     return;
-// }
-
-// int munmap(void *addr, int length){
-//   return 0;
-// }
