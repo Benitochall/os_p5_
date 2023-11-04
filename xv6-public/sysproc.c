@@ -215,15 +215,15 @@ int sys_mmap(void)
   }
 
   // Check for MAP_GROWSUP flag and adjust the mapping accordingly
-  if (flags & MAP_GROWSUP) {
-  // Ensure there is at least one guard page
-  length = PGROUNDUP(length); // Round up to the nearest page size
-  new_address = find_available_address(length + PGSIZE); // Reserve space for the guard page
-  if (new_address == 0) {
-    cprintf("Failed to find available address with guard page\n");
-    return -1;
-  }
-}
+//   if (flags & MAP_GROWSUP) {
+//   // Ensure there is at least one guard page
+//   length = PGROUNDUP(length); // Round up to the nearest page size
+//   new_address = find_available_address(length + PGSIZE); // Reserve space for the guard page
+//   if (new_address == 0) {
+//     cprintf("Failed to find available address with guard page\n");
+//     return -1;
+//   }
+// }
 
 
   // now we have found the address we can go ahead and add it to the sturct
