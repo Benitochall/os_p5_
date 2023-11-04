@@ -80,7 +80,10 @@ trap(struct trapframe *tf)
     lapiceoi();
     break; 
   case T_PGFLT:
-      page_fault_handler(rcr2()); // Handle page fault, pass the viral addrss in 
+      int ret = page_fault_handler(rcr2()); // Handle page fault, pass the viral addrss in 
+      if (ret <0){
+        kill(myproc()->pid); 
+      }
       break;
 
   //PAGEBREAK: 13
