@@ -182,8 +182,6 @@ UPROGS=\
 	_wc\
 	_zombie\
 	_testmunmap\
-	_test_4\
-	_test_5\
 	_test_6\
 	_test_7\
 	_test_9\
@@ -191,6 +189,8 @@ UPROGS=\
 	_test_8\
 	_test_11\
 	_test_12\
+	_test_13\
+	_test_14\
 	
 
 fs.img: mkfs README $(UPROGS)
