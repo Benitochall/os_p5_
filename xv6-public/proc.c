@@ -655,10 +655,47 @@ void page_fault_handler(uint va){
   }
 
   /* Case 2 - MAP_GROWSUP */
-  /* Case 3 - None of the Above - Error */
-  //cprintf("Segmentation Fault\n");
-  //kill_the_process() 
+  for (int i = 0; i < num_mappings; i++) {
+  struct mem_mapping *m = &currproc->memoryMappings[i];
+  
+  uint end_of_mapping = m->addr + m->length;
+  uint next_mapping_start = 0xFFFFFFFF; // Initialize with the max address or the start of the next mapping.
+  
+  // Find the start of the next mapping if it exists.
+  for (int j = 0; j < num_mappings; j++) {
+    if (currproc->memoryMappings[j].addr > end_of_mapping &&
+        currproc->memoryMappings[j].addr < next_mapping_start) {
+      next_mapping_start = currproc->memoryMappings[j].addr;
+    }
+  }
+  
+  // Check if the faulting address is on the guard page.
+  if ((m->flags & MAP_GROWSUP) && va == end_of_mapping) {
+    // Check if there's space to grow.
+    if (end_of_mapping + PGSIZE >= next_mapping_start) {
+      // No space to grow. Handle error.
+      panic("No space to grow mapping");
+    }
 
+    // Allocate a new page and map it.
+    char *mem = kalloc();
+    if (mem == 0) {
+      panic("Out of memory\n");
+    }
+    memset(mem, 0, PGSIZE);
+    if (mappages(currproc->pgdir, (char *)end_of_mapping, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0) {
+      kfree(mem);
+      panic("Mapping failed");
+    }
+
+    // Update the mapping length.
+    m->length += PGSIZE;
+    return; // Successfully handled the fault.
+  }
+}
+  /* Case 3 - None of the Above - Error */
+  cprintf("Segmentation Fault\n");
+  kill(currproc->pid);
 
 }
 
