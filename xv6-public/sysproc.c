@@ -296,8 +296,15 @@ int sys_munmap(void) {
           cprintf("file size %d\n", ip->size); 
         // we need dump the file into a buffer
         uint va = map->addr; 
+        uint offset = PGROUNDUP(map->addr + map->length); 
+        cprintf("flags is %d\n", map->flags); 
+        if (MAP_GROWSUP & map->flags){
+          cprintf("we shouldnt access this\n"); 
+          offset = PGROUNDUP(map->addr + map->length) -PGSIZE; 
+        }
         cprintf("trying to access %x\n", va); 
-        while (va < PGROUNDUP(map->addr + map->length) && (va - map->addr) < ip->size){
+        while (va < offset){
+          cprintf("made it into unmap\n"); 
           pte_t *pte;
 
           pte = walkpgdir(myproc()->pgdir, (void *)va, 0); // gets the page table entry
