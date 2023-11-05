@@ -58,6 +58,8 @@ int main() {
         char *mem_buff = (char *)mem;
         if (my_strcmp(mem_buff, new_buff, len) != 0) {
             printf(1, "Data mismatch in child\n");
+            printf(1, "\tExpected: %s\n", new_buff);
+            printf(1, "\tGot: %s\n", mem_buff);
             goto failed;
         }
 

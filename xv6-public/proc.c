@@ -208,29 +208,14 @@ int fork(void)
   // THIS NEXT SETCTION OF CODE IS THE IMPLEMTATION OF MAPSHARED
 
   np->num_mappings = curproc->num_mappings; // copy the number of mappings
-  int privateMap = 0;
+  
 
   for (int i = 0; i < curproc->num_mappings; i++)
   { // copy all specific mappings from parent to child
     struct mem_mapping map = curproc->memoryMappings[i];
-    if (map.flags & MAP_PRIVATE)
-    {
-      privateMap = 1; // this checks if even one of the mmaps is private
-    }
     np->memoryMappings[i] = map;
   }
-
-  if (privateMap)
-  {
-    // set up a blank pgdir for the child
-    if ((np->pgdir = setupkvm()) == 0)
-    {
-      panic("userinit: out of memory?");
-    }
-  }
-  else
-  { // set up the exact save pgdir for the new process
-    cprintf("copying the forked process to child\n"); 
+  // set up the exact save pgdir for the new process
     if ((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0)
     {
       cprintf("copy uvm failed\n"); 
@@ -239,7 +224,6 @@ int fork(void)
       np->state = UNUSED;
       return -1;
     }
-  }
 
   // END SECTION
 
