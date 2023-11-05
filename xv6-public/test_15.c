@@ -88,32 +88,21 @@ int main()
             goto failed;
         }
 
-        /* Modify data in child - shouldn't affect parent */
-        for (int i = 0; i < len; i++)
-            mem_buff[i] = 'b';
+	/* Modify data in child - shouldn't affect parent */
+	for(int i = 0; i < len; i++)
+		mem_buff[i] = 'b';
 
-        /* Print memory mappings after modification */
-        printf(1, "Child process after fork. Memory mappings after modification:\n");
-        for (int i = 0; i < len; i++)
-        {
-            printf(1, "%c", ((char *)mem)[i]);
-        }
-        printf(1, "\n");
-
-        /* Child success - exit */
-        exit();
-    }
-    else
-    {
+	/* Child success - exit */
+	exit();
+    } else {
         wait();
 
-        /* Verify the child modifications are not seen by the parent */
-        char *mem_buff = (char *)mem;
-        if (my_strcmp(mem_buff, new_buff, len) != 0)
-        {
-            printf(1, "Parent data corrupted by child\n");
-            goto failed;
-        }
+	/* Verify the child modifications are not seen by the parent */
+	char *mem_buff = (char*)mem;
+	if(my_strcmp(mem_buff, new_buff, len) != 0) {
+		printf(1, "Parent data corrupted by child\n");
+		goto failed;
+	}
 
         /* Clean and return */
         int ret = munmap(mem, len);

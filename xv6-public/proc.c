@@ -192,7 +192,8 @@ int growproc(int n)
 // Create a new process copying p as the parent.
 // Sets up stack to return as if from system call.
 // Caller must set state of returned proc to RUNNABLE.
-int fork(void)
+int
+fork(void)
 {
   // now lets take a look at our new program we have created
   int i, pid;
@@ -200,8 +201,7 @@ int fork(void)
   struct proc *curproc = myproc();
 
   // Allocate process.
-  if ((np = allocproc()) == 0)
-  {
+  if((np = allocproc()) == 0){
     return -1;
   }
 
@@ -210,27 +210,33 @@ int fork(void)
   // THIS NEXT SECTION OF CODE IS THE IMPLEMTATION OF MAPSHARED
 
   np->num_mappings = curproc->num_mappings; // copy the number of mappings
-  
+  int privateMap =0; 
 
-  for (int i = 0; i < curproc->num_mappings; i++)
-  { 
-    // copy all specific mappings from parent to child
+  for (int i = 0; i < curproc->num_mappings; i++) { // copy all specific mappings from parent to child
     struct mem_mapping map = curproc->memoryMappings[i];
+    if (map.flags & MAP_PRIVATE){
+      privateMap =1; // this checks if even one of the mmaps is private
+    }
     np->memoryMappings[i] = map;
   }
-
-
-  // set up the exact save pgdir for the new process
-    if ((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0)
-    {
-      cprintf("copy uvm failed\n"); 
+  
+  if (privateMap) {
+    //set up a blank pgdir for the child
+    if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
+      panic("userinit: out of memory?");
+    }
+    
+  }
+  else { // set up the exact save pgdir for the new process 
+    if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
       kfree(np->kstack);
       np->kstack = 0;
       np->state = UNUSED;
       return -1;
     }
+  }
 
-  // END SECTION
+  // END SECTION 
 
   // Copy process state from proc.
   np->sz = curproc->sz;
@@ -240,8 +246,8 @@ int fork(void)
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
 
-  for (i = 0; i < NOFILE; i++)
-    if (curproc->ofile[i])
+  for(i = 0; i < NOFILE; i++)
+    if(curproc->ofile[i])
       np->ofile[i] = filedup(curproc->ofile[i]);
   np->cwd = idup(curproc->cwd);
 
@@ -621,6 +627,8 @@ int page_fault_handler(uint va)
 
     if (va >= map.addr && va < PGROUNDUP(map.addr + map.length))
     {
+      // print out the num mappings 
+      cprintf("The number of mappings are %d with pid %d\n", currproc->num_mappings, currproc->pid); 
       if (map.fd >0){
         f = currproc->ofile[map.fd];
       if (f == 0)
@@ -633,7 +641,6 @@ int page_fault_handler(uint va)
 
 
       }
-
       
       int file_backed =0; 
       char *mem = kalloc();
@@ -674,44 +681,26 @@ int page_fault_handler(uint va)
 
       if (!(map.flags & MAP_ANONYMOUS)){ // this is the case where we are mapping from a file
         file_backed = 1; 
+        cprintf("the file descritor is %d\n", map.fd); 
 
         uint page_in_file = PGROUNDDOWN(va);                      // this is the page aligned
         int offset_into_file = (int)page_in_file - (int)map.addr; // this is were we want to grab the data in the file
+        cprintf("the mem is %p\n", &mem); 
 
-        cprintf("Offset into file: %d\n", offset_into_file);
-
-
-        // we need to only map non guard pages 
-        // if (offset_into_file > map.originalLength){
-        //   cprintf("offset greater than lentgh\n"); 
-        //   // we still want to allocate it with memory
-        //   file_backed =0; 
-        // }
-        // if (offset_into_file >=  PGROUNDUP(map.length) - map.guardPages * PGSIZE){
-        //   // dont map 
-        //   return; 
-        // }
 
         // now we need to read the contents of the file
         if (file_backed){
+
 
           char buffer[PGSIZE]; // Create a buffer to hold the read data
           begin_op();
           ilock(ip);
           // if it is a guard page do not read
-
-          int read_bytes = readi(ip, buffer, offset_into_file, PGSIZE);
-          read_bytes++; 
+          readi(ip, buffer, offset_into_file, PGSIZE);
           iunlock(ip);
           end_op();
 
-          if (read_bytes < 0)
-          {
-            panic("mapping failed 3");
-          }
-          else {
-            memmove(mem, buffer, PGSIZE);
-          }
+        memmove(mem, buffer, PGSIZE);
         }
       }
       if (!file_backed){
@@ -719,7 +708,7 @@ int page_fault_handler(uint va)
         memset(mem, 0, PGSIZE); // zero out the page
       }
 
-      if (mappages(currproc->pgdir, (char *)va, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0){ // map the page to physical address
+      if (mappages(currproc->pgdir, (char *)va, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0){
         kfree(mem);
       }
         file_backed = 0; 
