@@ -677,7 +677,7 @@ int page_fault_handler(uint va)
 
         currproc->memoryMappings[i].length += (int)PGSIZE; 
 
-        // if not mapped anonomous we need to incrment the file size
+        // if not mapped anonymous we need to increment the file size
 
         cprintf("map length %d\n", currproc->memoryMappings[i].length); 
 
@@ -733,7 +733,7 @@ int page_fault_handler(uint va)
       if (mappages(currproc->pgdir, (char *)va, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0){ // map the page to physical address
         kfree(mem);
       }
-        file_backed =0; 
+        file_backed = 0; 
         return 1;
       }
     }

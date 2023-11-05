@@ -143,12 +143,12 @@ int sys_mmap(void)
     return -1;
   }
 
-  cprintf("%d\n", addr);
-  cprintf("%d\n", length);
-  cprintf("%d\n", prot);
-  cprintf("%d\n", flags);
-  cprintf("%d\n", fd);
-  cprintf("%d\n", offset);
+  cprintf("addr: %d\n", addr);
+  cprintf("length: %d\n", length);
+  cprintf("prot: %d\n", prot);
+  cprintf("flags: %d\n", flags);
+  cprintf("fd: %d\n", fd);
+  cprintf("offset: %d\n", offset);
 
   if (length <=0) {
     return -1;

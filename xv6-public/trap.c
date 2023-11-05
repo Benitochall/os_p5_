@@ -80,8 +80,9 @@ trap(struct trapframe *tf)
     lapiceoi();
     break; 
   case T_PGFLT:
-      int ret = page_fault_handler(rcr2()); // Handle page fault, pass the viral addrss in 
-      if (ret <0){
+      int ret = page_fault_handler(rcr2()); // Handle page fault, pass the virtual address in
+      cprintf("ret: %d\n", ret);
+      if (ret < 0){
         kill(myproc()->pid); 
       }
       break;
