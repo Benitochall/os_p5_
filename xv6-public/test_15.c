@@ -64,16 +64,19 @@ int main() {
         }
 
 	/* Modify data in child - shouldn't affect parent */
+    printf(1, "here 1");
 	for(int i = 0; i < len; i++)
 		mem_buff[i] = 'b';
 
 	/* Child success - exit */
+    printf(1, "here 2");
 	exit();
     } else {
         wait();
 
 	/* Verify the child modifications are not seen by the parent */
 	char *mem_buff = (char*)mem;
+    printf(1, "here 3");
 	if(my_strcmp(mem_buff, new_buff, len) != 0) {
 		printf(1, "Parent data corrupted by child\n");
 		goto failed;
