@@ -313,6 +313,8 @@ int sys_munmap(void) {
             // if the address is not found but it is in the copy uvm 
             cprintf("something wrong with pte\n"); 
             return -1; 
+          } else{ 
+            cprintf("Child PTE for address %p: %x\n", va, *pte);
           }
           char *pa = P2V(PTE_ADDR(*pte));  // gets the physical address
           char buffer[PGSIZE]; 

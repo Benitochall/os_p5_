@@ -205,16 +205,21 @@ int fork(void)
     return -1;
   }
 
-  // THIS NEXT SETCTION OF CODE IS THE IMPLEMTATION OF MAPSHARED
+  cprintf("In fork, copying %d memory mappings.\n", curproc->num_mappings);
+
+  // THIS NEXT SECTION OF CODE IS THE IMPLEMTATION OF MAPSHARED
 
   np->num_mappings = curproc->num_mappings; // copy the number of mappings
   
 
   for (int i = 0; i < curproc->num_mappings; i++)
-  { // copy all specific mappings from parent to child
+  { 
+    // copy all specific mappings from parent to child
     struct mem_mapping map = curproc->memoryMappings[i];
     np->memoryMappings[i] = map;
   }
+
+
   // set up the exact save pgdir for the new process
     if ((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0)
     {

@@ -4,16 +4,20 @@
 #include "mmap.h"
 #include "fcntl.h"
 
-int my_strcmp(const char *a, const char *b, int n) {
-    for (int i = 0; i < n; i++) {
-        if (a[i] != b[i]) {
+int my_strcmp(const char *a, const char *b, int n)
+{
+    for (int i = 0; i < n; i++)
+    {
+        if (a[i] != b[i])
+        {
             return 1;
         }
     }
     return 0;
 }
 
-int main() {
+int main()
+{
     char *filename = "test_file.txt";
     int len = 100;
     int prot = PROT_READ | PROT_WRITE;
@@ -23,65 +27,98 @@ int main() {
 
     /* Open a file */
     int fd = open(filename, O_CREATE | O_RDWR);
-    if (fd < 0) {
+    if (fd < 0)
+    {
         printf(1, "Error opening file\n");
         goto failed;
     }
 
     /* Write some data to the file */
-    for (int i = 0; i < len; i++) {
+    for (int i = 0; i < len; i++)
+    {
         buff[i] = (char)(i % 256);
     }
-    if (write(fd, buff, len) != len) {
+    if (write(fd, buff, len) != len)
+    {
         printf(1, "Error: Write to file FAILED\n");
         goto failed;
     }
 
     /* mmap the file */
     void *mem = mmap(0, len, prot, flags, fd, 0);
-    if (mem == (void *)-1) {
+    if (mem == (void *)-1)
+    {
         printf(1, "mmap FAILED\n");
         goto failed;
     }
 
     /* Moify the mmapped memory */
-    char *charmem = (char*)mem;
-    for(int i = 0; i < len; i++) {
-	    charmem[i] = 'a';
-    	    new_buff[i] = charmem[i];
-	}
+    char *charmem = (char *)mem;
+    for (int i = 0; i < len; i++)
+    {
+        charmem[i] = 'a';
+        new_buff[i] = charmem[i];
+    }
+
+    printf(1, "Parent about to fork. Memory mappings:\n");
+    for (int i = 0; i < len; i++)
+    {
+        printf(1, "%c", ((char *)mem)[i]);
+    }
+    printf(1, "\n");
 
     /* Fork */
     int pid = fork();
-    if (pid == 0) {
+    if (pid == 0)
+    {
+        printf(1, "Child process after fork. Memory mappings before modification:\n");
+        for (int i = 0; i < len; i++)
+        {
+            printf(1, "%c", ((char *)mem)[i]);
+        }
+        printf(1, "\n");
+
         /* Verify the child can read the same data */
         char *mem_buff = (char *)mem;
-        if (my_strcmp(mem_buff, new_buff, len) != 0) {
+        if (my_strcmp(mem_buff, new_buff, len) != 0)
+        {
             printf(1, "Data mismatch in child\n");
             printf(1, "\tExpected: %s\n", new_buff);
             printf(1, "\tGot: %s\n", mem_buff);
             goto failed;
         }
 
-	/* Modify data in child - shouldn't affect parent */
-	for(int i = 0; i < len; i++)
-		mem_buff[i] = 'b';
+        /* Modify data in child - shouldn't affect parent */
+        for (int i = 0; i < len; i++)
+            mem_buff[i] = 'b';
 
-	/* Child success - exit */
-	exit();
-    } else {
+        /* Print memory mappings after modification */
+        printf(1, "Child process after fork. Memory mappings after modification:\n");
+        for (int i = 0; i < len; i++)
+        {
+            printf(1, "%c", ((char *)mem)[i]);
+        }
+        printf(1, "\n");
+
+        /* Child success - exit */
+        exit();
+    }
+    else
+    {
         wait();
 
-	/* Verify the child modifications are not seen by the parent */
-	char *mem_buff = (char*)mem;
-	if(my_strcmp(mem_buff, new_buff, len) != 0) {
-		printf(1, "Parent data corrupted by child\n");
-		goto failed;
-	}
+        /* Verify the child modifications are not seen by the parent */
+        char *mem_buff = (char *)mem;
+        if (my_strcmp(mem_buff, new_buff, len) != 0)
+        {
+            printf(1, "Parent data corrupted by child\n");
+            goto failed;
+        }
 
         /* Clean and return */
         int ret = munmap(mem, len);
-        if (ret < 0) {
+        if (ret < 0)
+        {
             printf(1, "munmap failed\n");
             goto failed;
         }
@@ -89,10 +126,7 @@ int main() {
         close(fd);
     }
 
-
-
-
-// success:
+    // success:
     printf(1, "MMAP\t SUCCESS\n");
     exit();
 
