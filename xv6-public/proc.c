@@ -205,7 +205,7 @@ int fork(void)
     return -1;
   }
 
-  cprintf("In fork, copying %d memory mappings.\n", curproc->num_mappings);
+  
 
   // THIS NEXT SECTION OF CODE IS THE IMPLEMTATION OF MAPSHARED
 
@@ -228,21 +228,7 @@ int fork(void)
     // Check if mapping is private and should be COW
     if (map->flags & MAP_PRIVATE)
     {
-      cprintf("Setting up COW for mapping %d with address range 0x%x to 0x%x\n",
-              i, map->addr, map->addr + map->length);
-      // Iterate over pages in this mapping
-
-      // Print parent's page table entries before COW setup
-      cprintf("Parent process page table before COW setup for mapping %d:\n", i);
-      for (uint address = map->addr; address < PGROUNDUP(map->addr + map->length); address += PGSIZE)
-      {
-        pte_t *pte = walkpgdir(curproc->pgdir, (void *)address, 0);
-        if (pte && (*pte & PTE_P))
-        {
-          cprintf("VA: 0x%x, PTE before COW: 0x%x\n", address, *pte);
-        }
-      }
-
+     
       // go through the mappings for the current proc and make all pte's read only, then copy all the pte's to the child
 
       for (uint address = map->addr; address < map->addr + map->length; address += PGSIZE)
@@ -269,113 +255,11 @@ int fork(void)
           }
         }
       }
-
-      // for (uint address = map->addr; address < PGROUNDUP(map->addr + map->length); address += PGSIZE)
-      // {
-      //   pte_t *pte = walkpgdir(curproc->pgdir, (void *)address, 0);
-      //   if (pte && (*pte & PTE_P))
-      //   {
-      //     // Mark the parent's page as read-only and set the COW flag
-      //     *pte &= ~PTE_W;
-      //     *pte |= PTE_COW;
-
-      //     // Do the same for the child's page table entries
-      //     pte_t *child_pte = walkpgdir(np->pgdir, (void *)address, 0);
-
-      //     if (child_pte)
-      //     {
-      //       *child_pte = (*child_pte & ~PTE_W) | PTE_COW;
-      //     }
-      //   }else{
-      //     panic("");
-      //   }
-      // }
-
-      // Print parent's page table entries after COW setup
-      cprintf("Parent process page table after COW setup for mapping %d:\n", i);
-      for (uint address = map->addr; address < PGROUNDUP(map->addr + map->length); address += PGSIZE)
-      {
-        pte_t *pte = walkpgdir(curproc->pgdir, (void *)address, 0);
-        if (pte && (*pte & PTE_P))
-        {
-          cprintf("VA: 0x%x, PTE after COW: 0x%x\n", address, *pte);
-        }
-      }
-
-      // Print child's page table entries after COW setup
-      cprintf("Child process page table after COW setup for mapping %d:\n", i);
-      for (uint address = map->addr; address < PGROUNDUP(map->addr + map->length); address += PGSIZE)
-      {
-        pte_t *child_pte = walkpgdir(np->pgdir, (void *)address, 0);
-        if (child_pte && (*child_pte & PTE_P))
-        { // Check if PTE is present
-          cprintf("VA: 0x%x, Child PTE after COW: 0x%x\n", address, *child_pte);
-          if (!(*child_pte & PTE_W))
-          {
-            cprintf("Child PTE is read-only, COW setup correctly.\n");
-          }
-          else
-          {
-            cprintf("Error: Child PTE is writable, COW setup incorrectly.\n");
-          }
-        }
-        else
-        {
-          cprintf("Child PTE not present for VA: 0x%x\n", address);
-        }
-      }
     }
     np->memoryMappings[i] = *map;
   }
-
-  // int privateMap = 0;
-
-  // for (int i = 0; i < curproc->num_mappings; i++)
-  // { // copy all specific mappings from parent to child
-  //   struct mem_mapping map = curproc->memoryMappings[i];
-  //   if (map.flags & MAP_PRIVATE)
-  //   {
-  //     privateMap = 1; // this checks if even one of the mmaps is private
-  //   }
-  //   np->memoryMappings[i] = map;
-  // } // figure out if the mapping is allocated or not. if it is, get all the va of that allocation, kalloc gets the next available physical page, walk, memset it to 0.
-
-  // if (privateMap)
-  // {
-  //   // set up a blank pgdir for the child
-  //   if ((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0)
-  //   {
-  //     panic("userinit: out of memory?");
-  //   }
-  //   for (int i = 0; i < curproc->num_mappings; i++)
-  //   {
-  //     struct mem_mapping map = curproc->memoryMappings[i];
-
-  //     if (map.allocated == 1)
-  //     {
-  //       uint address = map.addr;
-  //       while (address < PGROUNDUP(map.addr + map.length))
-  //       {
-  //         char *mem = kalloc();
-  //         memset(mem, 0, PGSIZE);
-  //         mappages(np->pgdir, (char *)address, PGSIZE, V2P(mem), PTE_W | PTE_U);
-  //         address += PGSIZE;
-  //       }
-  //     }
-  //   }
-  // }
-  // else
-  // { // set up the exact save pgdir for the new process
-  //   if ((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0)
-  //   {
-  //     kfree(np->kstack);
-  //     np->kstack = 0;
-  //     np->state = UNUSED;
-  //     return -1;
-  //   }
-  // }
-
-  // END SECTION
+ 
+  //END SECTION
 
   // Copy process state from proc.
   np->sz = curproc->sz;
@@ -748,8 +632,6 @@ int page_fault_handler(uint va)
   struct file *f = 0;
   struct inode *ip = 0;
 
-  cprintf("Page fault handler called for address: 0x%x\n", va);
-
   /* Case 1 - Lazy Allocation */
   // go throgh kalloc routine
   struct proc *currproc = myproc(); // get the current process
@@ -761,7 +643,6 @@ int page_fault_handler(uint va)
   // Check if the page fault was due to a write on a COW page
   if (pte && (*pte & PTE_COW) && !(*pte & PTE_W))
   {
-    cprintf("COW page fault for address: 0x%x, PTE before: 0x%x\n", va, *pte);
     // This is a COW fault, handle it
     char *mem = kalloc();
     if (mem == 0)
@@ -771,32 +652,11 @@ int page_fault_handler(uint va)
     char *old_page = P2V(PTE_ADDR(*pte)); // Get the address of the old page
     memmove(mem, old_page, PGSIZE);       // Copy contents to the new page
 
-    // Debug: Print the first few bytes of the old and new pages to verify the copy
-    cprintf("Old page contents at 0x%p: ", old_page);
-    for (int i = 0; i < 16; i++)
-    {
-      uint byte = ((char *)old_page)[i] & 0xff;
-      cprintf(byte < 0x10 ? "0" : "");
-      cprintf("%x ", byte);
-    }
-    cprintf("\n");
-
-    cprintf("New page contents at 0x%p (should be zeroed): ", mem);
-    for (int i = 0; i < 16; i++)
-    {
-      uint byte = ((char *)mem)[i] & 0xff;
-      cprintf(byte < 0x10 ? "0" : "");
-      cprintf("%x ", byte);
-    }
-    cprintf("\n");
-
     // Update PTE to point to the new page and make it writable
     *pte = V2P(mem) | PTE_FLAGS(*pte) | PTE_W;
     *pte &= ~PTE_COW; // Clear the COW flag
 
     lcr3(V2P(currproc->pgdir)); // Flush the TLB
-
-    cprintf("New PTE after COW handling: 0x%x\n", *pte);
 
     return 1; // COW fault handled successfully
   }
@@ -817,8 +677,7 @@ int page_fault_handler(uint va)
     {
 
       map.allocated = 1; // set the mapping to be allocated
-      // print out the num mappings
-      cprintf("The number of mappings are %d with pid %d\n", currproc->num_mappings, currproc->pid);
+      
       if (map.fd > 0)
       {
         f = currproc->ofile[map.fd];
@@ -838,13 +697,6 @@ int page_fault_handler(uint va)
         // Handle error: free any previously allocated pages
         panic("mapping failed 2"); // Allocation failed
       }
-      // debug
-      cprintf("Allocated new page at mem: %p\n", mem);
-      cprintf("First byte of new page after allocation (should be zero if zeroed out): ");
-      uint byte = ((char *)mem)[0] & 0xff;
-      cprintf(byte < 0x10 ? "0" : "");
-      cprintf("%x ", byte);
-      cprintf("\n");
 
       // the first check we want to do is check to see if it is Map_grows up
       if ((map.flags & MAP_GROWSUP))
@@ -872,62 +724,39 @@ int page_fault_handler(uint va)
 
         // if not mapped anonymous we need to increment the file size
 
-        cprintf("map length %d\n", currproc->memoryMappings[i].length);
       }
 
       if (!(map.flags & MAP_ANONYMOUS))
       { // this is the case where we are mapping from a file
         file_backed = 1;
-        cprintf("the file descritor is %d\n", map.fd);
+        
 
         uint page_in_file = PGROUNDDOWN(va);                      // this is the page aligned
         int offset_into_file = (int)page_in_file - (int)map.addr; // this is were we want to grab the data in the file
-        cprintf("the mem is %p\n", &mem);
+        
 
         // now we need to read the contents of the file
         if (file_backed)
         {
 
           char buffer[PGSIZE]; // Create a buffer to hold the read data
-
-          cprintf("Offset into file: %d\n", offset_into_file); // Debug: Print offset into file
-
           begin_op();
           ilock(ip);
           // if it is a guard page do not read
           readi(ip, buffer, offset_into_file, PGSIZE);
-
-          // debug
-          cprintf("Buffer contents after file read: ");
-          for (int i = 0; i < 16 && i < map.length; i++)
-          {
-            uint byte = buffer[i] & 0xff;    // Extract the byte.
-            cprintf(byte < 0x10 ? "0" : ""); // Print leading zero if needed.
-            cprintf("%x ", byte);            // Print the byte in hex.
-          }
-          cprintf("\n");
-
           iunlock(ip);
           end_op();
 
           memmove(mem, buffer, PGSIZE);
-          // debug
-          cprintf("First byte of page after copying from buffer: ");
-          uint byte = ((char *)mem)[0] & 0xff; // Get the first byte and ensure it is in the range 0x00 - 0xff
-          cprintf(byte < 0x10 ? "0" : "");     // Print a leading zero if less than 0x10 to maintain two hex digits
-          cprintf("%x ", byte);                // Print the first byte in hex format
-          cprintf("\n");
         }
       }
       if (!file_backed)
       {
-        cprintf("we have a non file backed\n");
         memset(mem, 0, PGSIZE); // zero out the page
       }
 
       if (mappages(currproc->pgdir, (char *)va, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0)
       {
-        cprintf("freeing mem %p\n", mem);
         kfree(mem);
       }
       else
@@ -950,6 +779,5 @@ int page_fault_handler(uint va)
   }
 
   cprintf("Segmentation Fault\n");
-  cprintf("Segmentation Fault at address: 0x%x, checked %d mappings\n", va, num_mappings);
   return -1;
 }
