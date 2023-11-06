@@ -243,24 +243,53 @@ int fork(void)
         }
       }
 
-      for (uint address = map->addr; address < PGROUNDUP(map->addr + map->length); address += PGSIZE)
+      // go through the mappings for the current proc and make all pte's read only, then copy all the pte's to the child
+
+      for (uint address = map->addr; address < map->addr + map->length; address += PGSIZE)
       {
+        // Access the PTE for the parent.
         pte_t *pte = walkpgdir(curproc->pgdir, (void *)address, 0);
         if (pte && (*pte & PTE_P))
         {
-          // Mark the parent's page as read-only and set the COW flag
+          // Make the parent's page read-only and set the COW flag.
           *pte &= ~PTE_W;
           *pte |= PTE_COW;
+          lcr3(V2P(curproc->pgdir)); // Flush the TLB to ensure the new PTE setting takes effect.
 
-          // Do the same for the child's page table entries
-          pte_t *child_pte = walkpgdir(np->pgdir, (void *)address, 0);
-
+          // Now ensure the child has a PTE for the same address.
+          pte_t *child_pte = walkpgdir(np->pgdir, (void *)address, 1); // Pass 1 to create the PTE if it does not exist.
           if (child_pte)
           {
-            *child_pte = (*child_pte & ~PTE_W) | PTE_COW;
+            // Copy parent PTE to child PTE.
+            *child_pte = *pte;
+          }
+          else
+          {
+            panic("Failed to allocate PTE for child.");
           }
         }
       }
+
+      // for (uint address = map->addr; address < PGROUNDUP(map->addr + map->length); address += PGSIZE)
+      // {
+      //   pte_t *pte = walkpgdir(curproc->pgdir, (void *)address, 0);
+      //   if (pte && (*pte & PTE_P))
+      //   {
+      //     // Mark the parent's page as read-only and set the COW flag
+      //     *pte &= ~PTE_W;
+      //     *pte |= PTE_COW;
+
+      //     // Do the same for the child's page table entries
+      //     pte_t *child_pte = walkpgdir(np->pgdir, (void *)address, 0);
+
+      //     if (child_pte)
+      //     {
+      //       *child_pte = (*child_pte & ~PTE_W) | PTE_COW;
+      //     }
+      //   }else{
+      //     panic("");
+      //   }
+      // }
 
       // Print parent's page table entries after COW setup
       cprintf("Parent process page table after COW setup for mapping %d:\n", i);
@@ -278,9 +307,21 @@ int fork(void)
       for (uint address = map->addr; address < PGROUNDUP(map->addr + map->length); address += PGSIZE)
       {
         pte_t *child_pte = walkpgdir(np->pgdir, (void *)address, 0);
-        if (child_pte)
-        {
+        if (child_pte && (*child_pte & PTE_P))
+        { // Check if PTE is present
           cprintf("VA: 0x%x, Child PTE after COW: 0x%x\n", address, *child_pte);
+          if (!(*child_pte & PTE_W))
+          {
+            cprintf("Child PTE is read-only, COW setup correctly.\n");
+          }
+          else
+          {
+            cprintf("Error: Child PTE is writable, COW setup incorrectly.\n");
+          }
+        }
+        else
+        {
+          cprintf("Child PTE not present for VA: 0x%x\n", address);
         }
       }
     }
@@ -870,13 +911,12 @@ int page_fault_handler(uint va)
           end_op();
 
           memmove(mem, buffer, PGSIZE);
-          //debug
+          // debug
           cprintf("First byte of page after copying from buffer: ");
           uint byte = ((char *)mem)[0] & 0xff; // Get the first byte and ensure it is in the range 0x00 - 0xff
           cprintf(byte < 0x10 ? "0" : "");     // Print a leading zero if less than 0x10 to maintain two hex digits
           cprintf("%x ", byte);                // Print the first byte in hex format
           cprintf("\n");
-
         }
       }
       if (!file_backed)
