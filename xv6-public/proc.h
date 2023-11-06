@@ -16,6 +16,7 @@ struct mem_mapping {
   int flags;  // Flags as passed to mmap (e.g., MAP_FIXED, MAP_ANONYMOUS, etc.)
   int fd;     // File descriptor for file-backed mappings, if applicable
   int originalLength; 
+  int allocated;
 };
 
 int page_fault_handler(uint addr); // the trap handler

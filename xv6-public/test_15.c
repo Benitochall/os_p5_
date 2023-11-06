@@ -60,10 +60,13 @@ int main()
         new_buff[i] = charmem[i];
     }
 
-    printf(1, "Parent about to fork. Memory mappings:\n");
-    for (int i = 0; i < len; i++)
+    // Debug: Print parent memory before fork
+    printf(1, "Parent memory before fork (first 16 bytes): ");
+    for (int i = 0; i < 16 && i < len; i++)
     {
-        printf(1, "%c", ((char *)mem)[i]);
+        uint byte = ((char *)mem)[i] & 0xff;
+        printf(1, byte < 0x10 ? "0" : "");
+        printf(1, "%x ", byte);
     }
     printf(1, "\n");
 
@@ -71,13 +74,14 @@ int main()
     int pid = fork();
     if (pid == 0)
     {
-        printf(1, "Child process after fork. Memory mappings before modification:\n");
-        for (int i = 0; i < len; i++)
+        printf(1, "Child memory after fork, before modification (first 16 bytes): ");
+        for (int i = 0; i < 16 && i < len; i++)
         {
-            printf(1, "%c", ((char *)mem)[i]);
+            uint byte = ((char *)mem)[i] & 0xff;
+            printf(1, byte < 0x10 ? "0" : "");
+            printf(1, "%x ", byte);
         }
         printf(1, "\n");
-
         /* Verify the child can read the same data */
         char *mem_buff = (char *)mem;
         if (my_strcmp(mem_buff, new_buff, len) != 0)
@@ -88,21 +92,39 @@ int main()
             goto failed;
         }
 
-	/* Modify data in child - shouldn't affect parent */
-	for(int i = 0; i < len; i++)
-		mem_buff[i] = 'b';
+        /* Modify data in child - shouldn't affect parent */
+        for (int i = 0; i < len; i++)
+        {
+            mem_buff[i] = 'b';
+        }
 
-	/* Child success - exit */
-	exit();
-    } else {
+        printf(1, "Child memory after modification:\n");
+        for (int i = 0; i < len; i++)
+        {
+            printf(1, "%c", ((char *)mem)[i]);
+        }
+        printf(1, "\n");
+        /* Child success - exit */
+        exit();
+    }
+    else
+    {
         wait();
 
-	/* Verify the child modifications are not seen by the parent */
-	char *mem_buff = (char*)mem;
-	if(my_strcmp(mem_buff, new_buff, len) != 0) {
-		printf(1, "Parent data corrupted by child\n");
-		goto failed;
-	}
+        printf(1, "Parent memory after child exits:\n");
+        for (int i = 0; i < len; i++)
+        {
+            printf(1, "%c", ((char *)mem)[i]);
+        }
+        printf(1, "\n");
+
+        /* Verify the child modifications are not seen by the parent */
+        char *mem_buff = (char *)mem;
+        if (my_strcmp(mem_buff, new_buff, len) != 0)
+        {
+            printf(1, "Parent data corrupted by child\n");
+            goto failed;
+        }
 
         /* Clean and return */
         int ret = munmap(mem, len);

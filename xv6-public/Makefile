@@ -182,6 +182,9 @@ UPROGS=\
 	_wc\
 	_zombie\
 	_testmunmap\
+	_test_12\
+	_test_13\
+	_test_14\
 	_test_15\
 	
 

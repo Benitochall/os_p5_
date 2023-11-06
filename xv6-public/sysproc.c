@@ -277,71 +277,138 @@ int sys_munmap(void) {
     return -1;
   }
 
-  
+  struct inode *ip = 0;
+
   // Iterate over the mappings and find the mapping for the given address.
   for (int i = 0; i < curproc->num_mappings; i++) {
-    // may need to walk the page directory
     struct mem_mapping *map = &curproc->memoryMappings[i];
     if ((uint)addr >= map->addr && (uint)addr + length <= map->addr + map->length) {
       // If the mapping is file-backed with the MAP_SHARED flag, write it back to the file.
       if ((map->flags & MAP_SHARED) && !(map->flags & MAP_ANONYMOUS) && map->fd >= 0) {
-          cprintf("the number of mappings are %d\n", curproc->num_mappings);
-          f = curproc->ofile[map->fd];
-          if (f == 0)
-            {
-              // Handle error: Invalid file descriptor
-              panic("mapping failed 1");
-            }
-          struct inode *ip = f->ip;
-          cprintf("file size %d\n", ip->size); 
-        // we need dump the file into a buffer
-        uint va = map->addr; 
-        uint offset = PGROUNDUP(map->addr + map->length); 
-        cprintf("flags is %d\n", map->flags); 
-        if (MAP_GROWSUP & map->flags){
-          cprintf("we shouldnt access this\n"); 
-          offset = PGROUNDUP(map->addr + map->length) -PGSIZE; 
+        f = curproc->ofile[map->fd];
+        if (f == 0) {
+          // Handle error: Invalid file descriptor
+          panic("mapping failed 1");
         }
-        cprintf("trying to access %x\n", va); 
-        while (va < offset){
-          cprintf("made it into unmap\n"); 
-          pte_t *pte;
-
-          pte = walkpgdir(myproc()->pgdir, (void *)va, 0); // gets the page table entry
-
-          if(!pte || !(*pte & PTE_P)){
-            // if the address is not found but it is in the copy uvm 
-            cprintf("something wrong with pte\n"); 
-            return -1; 
-          } else{ 
-            cprintf("Child PTE for address %p: %x\n", va, *pte);
-          }
-          char *pa = P2V(PTE_ADDR(*pte));  // gets the physical address
-          char buffer[PGSIZE]; 
-          // Copy data from physical address 'pa' to the buffer
-          memmove(buffer, pa, PGSIZE);
-          
-          uint offset_into_file = va - map->addr; 
-
-          begin_op();
-          ilock(ip);
-          int written_bytes = writei(ip, buffer, offset_into_file, PGSIZE);
-
-          cprintf("Made it here2\n"); 
-
-          iunlock(ip); 
-          end_op(); 
-
-         if (written_bytes < 0) {
-            cprintf(" write bytes is negative\n");
-            return -1;
-          }
-          // now we need to increment the va
-          va+=PGSIZE; 
-          }
+        ip = f->ip;
       }
+
+      // Handle unmap and free pages
+      uint va = (uint)addr;
+      while (va < (uint)addr + length) {
+        pte_t *pte = walkpgdir(curproc->pgdir, (void *)va, 0);
+        if (pte && (*pte & PTE_P)) {
+          char *pa = P2V(PTE_ADDR(*pte));
+          if ((map->flags & MAP_SHARED) && !(map->flags & MAP_ANONYMOUS)) {
+            // Write back to file if necessary
+            char buffer[PGSIZE];
+            memmove(buffer, pa, PGSIZE);
+            uint offset_into_file = va - map->addr;
+            begin_op();
+            ilock(ip);
+            int written_bytes = writei(ip, buffer, offset_into_file, PGSIZE);
+            iunlock(ip);
+            end_op();
+            if (written_bytes < 0) {
+              cprintf("write bytes is negative\n");
+              return -1;
+            }
+          }
+
+          // if (!(map->flags & MAP_SHARED)) {
+          //   // Free the page for private mappings
+          //   kfree(pa);
+          // }
+          // *pte = 0; // Clear the PTE
+        }
+        va += PGSIZE;
+      }
+
+  // // Iterate over the mappings and find the mapping for the given address.
+  // for (int i = 0; i < curproc->num_mappings; i++) {
+  //   // may need to walk the page directory
+  //   struct mem_mapping *map = &curproc->memoryMappings[i];
+  //   if ((uint)addr >= map->addr && (uint)addr + length <= map->addr + map->length) {
+  //     // If the mapping is file-backed with the MAP_SHARED flag, write it back to the file.
+  //     if ((map->flags & MAP_SHARED) && !(map->flags & MAP_ANONYMOUS) && map->fd >= 0) {
+  //         cprintf("the number of mappings are %d\n", curproc->num_mappings);
+  //         f = curproc->ofile[map->fd];
+  //         if (f == 0)
+  //           {
+  //             // Handle error: Invalid file descriptor
+  //             panic("mapping failed 1");
+  //           }
+  //         struct inode *ip = f->ip;
+  //         cprintf("file size %d\n", ip->size); 
+  //       // we need dump the file into a buffer
+  //       uint va = map->addr; 
+  //       uint offset = PGROUNDUP(map->addr + map->length); 
+  //       cprintf("flags is %d\n", map->flags); 
+  //       if (MAP_GROWSUP & map->flags){
+  //         cprintf("we shouldnt access this\n"); 
+  //         offset = PGROUNDUP(map->addr + map->length) -PGSIZE; 
+  //       }
+  //       cprintf("trying to access %x\n", va); 
+  //       while (va < offset){
+  //         cprintf("made it into unmap\n"); 
+  //         pte_t *pte;
+
+  //         pte = walkpgdir(myproc()->pgdir, (void *)va, 0); // gets the page table entry
+
+  //         cprintf("pte is %x\n", pte);
+
+  //         //IMPORTANT ------------------->>>>
+  //         if(!pte || !(*pte & PTE_P)){
+  //           // if the address is not found but it is in the copy uvm 
+  //           cprintf("something wrong with pte\n"); 
+  //           return -1; 
+  //         } 
+  //         // else{ 
+  //         //   cprintf("Child PTE for address %p: %x\n", va, *pte);
+  //         // }
+  //         char *pa = P2V(PTE_ADDR(*pte));  // gets the physical address
+  //         char buffer[PGSIZE]; 
+  //         // Copy data from physical address 'pa' to the buffer
+  //         memmove(buffer, pa, PGSIZE);
+          
+  //         uint offset_into_file = va - map->addr; 
+
+  //         begin_op();
+  //         ilock(ip);
+  //         int written_bytes = writei(ip, buffer, offset_into_file, PGSIZE);
+
+  //         cprintf("Made it here2\n"); 
+
+  //         iunlock(ip); 
+  //         end_op(); 
+
+  //        if (written_bytes < 0) {
+  //           cprintf(" write bytes is negative\n");
+  //           return -1;
+  //         }
+  //         // now we need to increment the va
+  //         va+=PGSIZE; 
+  //         }
+  //     }
+
+  //     uint va = (uint)addr;
+  //     while (va < (uint)addr + length) {
+  //       pte_t *pte = walkpgdir(curproc->pgdir, (void *)va, 0);
+  //       if (pte && (*pte & PTE_P)) {
+  //         // If it's a shared mapping, do not free the page, just clear the PTE.
+  //         // If it's a private mapping, we free the page.
+  //         if (!(map->flags & MAP_SHARED)) {
+  //           char *pa = P2V(PTE_ADDR(*pte));
+  //           kfree(pa);
+  //         }
+  //         *pte = 0;
+  //       }
+  //       va += PGSIZE;
+  //     }
+
     }
 
+    // Shift the remaining mappings in the array up one spot to fill the gap.
     for (int k = i; k < curproc->num_mappings - 1; k++) {
       curproc->memoryMappings[k] = curproc->memoryMappings[k + 1];
     }
