@@ -734,7 +734,9 @@ int page_fault_handler(uint va)
     cprintf("Old page contents at 0x%p: ", old_page);
     for (int i = 0; i < 16; i++)
     {
-      cprintf("%02x ", old_page[i] & 0xff);
+      uint byte = ((char *)old_page)[i] & 0xff;
+      cprintf(byte < 0x10 ? "0" : "");
+      cprintf("%x ", byte);
     }
     cprintf("\n");
 
