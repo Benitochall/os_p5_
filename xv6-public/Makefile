@@ -182,7 +182,6 @@ UPROGS=\
 	_wc\
 	_zombie\
 	_testmunmap\
-	_test_15\
 	
 
 fs.img: mkfs README $(UPROGS)

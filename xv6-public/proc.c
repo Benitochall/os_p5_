@@ -192,8 +192,7 @@ int growproc(int n)
 // Create a new process copying p as the parent.
 // Sets up stack to return as if from system call.
 // Caller must set state of returned proc to RUNNABLE.
-int
-fork(void)
+int fork(void)
 {
   // now lets take a look at our new program we have created
   int i, pid;
@@ -201,40 +200,66 @@ fork(void)
   struct proc *curproc = myproc();
 
   // Allocate process.
-  if((np = allocproc()) == 0){
+  if ((np = allocproc()) == 0)
+  {
     return -1;
   }
 
-  // THIS NEXT SETCTION OF CODE IS THE IMPLEMTATION OF MAPSHARED
+  
+
+  // THIS NEXT SECTION OF CODE IS THE IMPLEMTATION OF MAPSHARED
 
   np->num_mappings = curproc->num_mappings; // copy the number of mappings
-  int privateMap =0; 
 
-  for (int i = 0; i < curproc->num_mappings; i++) { // copy all specific mappings from parent to child
-    struct mem_mapping map = curproc->memoryMappings[i];
-    if (map.flags & MAP_PRIVATE){
-      privateMap =1; // this checks if even one of the mmaps is private
-    }
-    np->memoryMappings[i] = map;
-  }
-  
-  if (privateMap) {
-    //set up a blank pgdir for the child
-    if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
-      panic("userinit: out of memory?");
-    }
-    
-  }
-  else { // set up the exact save pgdir for the new process 
-    if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
-      kfree(np->kstack);
-      np->kstack = 0;
-      np->state = UNUSED;
-      return -1;
-    }
+  // Set up the new page directory for the child
+  if ((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0)
+  {
+    kfree(np->kstack);
+    np->kstack = 0;
+    np->state = UNUSED;
+    return -1;
   }
 
-  // END SECTION 
+  // Copy and mark the parent's pages as COW
+  for (i = 0; i < curproc->num_mappings; i++)
+  {
+    struct mem_mapping *map = &curproc->memoryMappings[i];
+
+    // Check if mapping is private and should be COW
+    if (map->flags & MAP_PRIVATE)
+    {
+     
+      // go through the mappings for the current proc and make all pte's read only, then copy all the pte's to the child
+
+      for (uint address = map->addr; address < map->addr + map->length; address += PGSIZE)
+      {
+        // Access the PTE for the parent.
+        pte_t *pte = walkpgdir(curproc->pgdir, (void *)address, 0);
+        if (pte && (*pte & PTE_P))
+        {
+          // Make the parent's page read-only and set the COW flag.
+          *pte &= ~PTE_W;
+          *pte |= PTE_COW;
+          lcr3(V2P(curproc->pgdir)); // Flush the TLB to ensure the new PTE setting takes effect.
+
+          // Now ensure the child has a PTE for the same address.
+          pte_t *child_pte = walkpgdir(np->pgdir, (void *)address, 1); // Pass 1 to create the PTE if it does not exist.
+          if (child_pte)
+          {
+            // Copy parent PTE to child PTE.
+            *child_pte = *pte;
+          }
+          else
+          {
+            panic("Failed to allocate PTE for child.");
+          }
+        }
+      }
+    }
+    np->memoryMappings[i] = *map;
+  }
+ 
+  //END SECTION
 
   // Copy process state from proc.
   np->sz = curproc->sz;
@@ -244,8 +269,8 @@ fork(void)
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
 
-  for(i = 0; i < NOFILE; i++)
-    if(curproc->ofile[i])
+  for (i = 0; i < NOFILE; i++)
+    if (curproc->ofile[i])
       np->ofile[i] = filedup(curproc->ofile[i]);
   np->cwd = idup(curproc->cwd);
 
@@ -545,19 +570,22 @@ int kill(int pid)
   return -1;
 }
 
-int count_children(struct proc* parent_proc) {
-    struct proc* p;
-    int count = 0;
-    
-    acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-        if(p->parent == parent_proc) {
-            count++;
-        }
+int count_children(struct proc *parent_proc)
+{
+  struct proc *p;
+  int count = 0;
+
+  acquire(&ptable.lock);
+  for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  {
+    if (p->parent == parent_proc)
+    {
+      count++;
     }
-    release(&ptable.lock);
-    
-    return count;
+  }
+  release(&ptable.lock);
+
+  return count;
 }
 
 // PAGEBREAK: 36
@@ -604,12 +632,33 @@ int page_fault_handler(uint va)
   struct file *f = 0;
   struct inode *ip = 0;
 
-  cprintf("Page fault at %p\n", va);
-
   /* Case 1 - Lazy Allocation */
   // go throgh kalloc routine
   struct proc *currproc = myproc(); // get the current process
-  
+
+  pte_t *pte = walkpgdir(currproc->pgdir, (void *)va, 0);
+
+
+  // Check if the page fault was due to a write on a COW page
+  if (pte && (*pte & PTE_COW) && !(*pte & PTE_W))
+  {
+    // This is a COW fault, handle it
+    char *mem = kalloc();
+    if (mem == 0)
+    {
+      panic("Out of memory - COW page fault handler"); // Handle allocation failure
+    }
+    char *old_page = P2V(PTE_ADDR(*pte)); // Get the address of the old page
+    memmove(mem, old_page, PGSIZE);       // Copy contents to the new page
+
+    // Update PTE to point to the new page and make it writable
+    *pte = V2P(mem) | PTE_FLAGS(*pte) | PTE_W;
+    *pte &= ~PTE_COW; // Clear the COW flag
+
+    lcr3(V2P(currproc->pgdir)); // Flush the TLB
+
+    return 1; // COW fault handled successfully
+  }
 
   // get the number of array of mappings
   int num_mappings = currproc->num_mappings;
@@ -621,27 +670,25 @@ int page_fault_handler(uint va)
 
     // now I need to get the specific mapping at I
     struct mem_mapping map = currproc->memoryMappings[i];
-    cprintf("map.length: %d\n", map.length);
 
     if (va >= map.addr && va < PGROUNDUP(map.addr + map.length))
     {
-      // print out the num mappings 
-      cprintf("The number of mappings are %d with pid %d\n", currproc->num_mappings, currproc->pid); 
-      if (map.fd >0){
+
+      map.allocated = 1; // set the mapping to be allocated
+      
+      if (map.fd > 0)
+      {
         f = currproc->ofile[map.fd];
-      if (f == 0)
+        if (f == 0)
         {
           // Handle error: Invalid file descriptor
           panic("mapping failed 1");
         }
         ip = f->ip;
-      cprintf("file size%d\n", ip->size); 
-
-
       }
-      
-      int file_backed =0; 
-      char *mem = kalloc();
+
+      int file_backed = 0;
+      char *mem = kalloc(); // Call THIS ONLY IF PGDIR FAILS and if it doesn't fail teh value returned by pdgir will be parent's pgdir
       if (mem == 0)
       {
         // Handle error: free any previously allocated pages
@@ -649,18 +696,19 @@ int page_fault_handler(uint va)
       }
 
       // the first check we want to do is check to see if it is Map_grows up
-      if ((map.flags & MAP_GROWSUP)){
+      if ((map.flags & MAP_GROWSUP))
+      {
         uint end_of_mapping = PGROUNDUP(map.addr + map.length) + PGSIZE; // this is going to get end of our mapping
         uint next_mapping_start = 0xFFFFFFFF;
 
         for (int j = 0; j < num_mappings; j++)
         {
-          
+
           if (currproc->memoryMappings[j].addr >= end_of_mapping &&
               currproc->memoryMappings[j].addr < next_mapping_start)
           {
             next_mapping_start = currproc->memoryMappings[j].addr; // this sets the next mapping start to be in the right place
-            
+
             break;
           }
         }
@@ -669,26 +717,24 @@ int page_fault_handler(uint va)
           break;
         }
 
-        currproc->memoryMappings[i].length += (int)PGSIZE; 
+        currproc->memoryMappings[i].length += (int)PGSIZE;
 
-        // if not mapped anonomous we need to incrment the file size
-
-        cprintf("map length %d\n", currproc->memoryMappings[i].length); 
+        // if not mapped anonymous we need to increment the file size
 
       }
 
-      if (!(map.flags & MAP_ANONYMOUS)){ // this is the case where we are mapping from a file
-        file_backed = 1; 
-        cprintf("the file descritor is %d\n", map.fd); 
+      if (!(map.flags & MAP_ANONYMOUS))
+      { // this is the case where we are mapping from a file
+        file_backed = 1;
+        
 
         uint page_in_file = PGROUNDDOWN(va);                      // this is the page aligned
         int offset_into_file = (int)page_in_file - (int)map.addr; // this is were we want to grab the data in the file
-        cprintf("the mem is %p\n", &mem); 
-
+        
 
         // now we need to read the contents of the file
-        if (file_backed){
-
+        if (file_backed)
+        {
 
           char buffer[PGSIZE]; // Create a buffer to hold the read data
           begin_op();
@@ -698,22 +744,29 @@ int page_fault_handler(uint va)
           iunlock(ip);
           end_op();
 
-        memmove(mem, buffer, PGSIZE);
+          memmove(mem, buffer, PGSIZE);
         }
       }
-      if (!file_backed){
-        cprintf("we have a non file backed\n");
+      if (!file_backed)
+      {
         memset(mem, 0, PGSIZE); // zero out the page
       }
 
-      if (mappages(currproc->pgdir, (char *)va, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0){
+      if (mappages(currproc->pgdir, (char *)va, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0)
+      {
         kfree(mem);
       }
-        file_backed =0; 
-        return 1;
+      else
+      {
+        // After successful mappages call
+        pte_t *pte = walkpgdir(currproc->pgdir, (void *)va, 0);
       }
+
+      file_backed = 0;
+      return 1;
     }
+  }
 
   cprintf("Segmentation Fault\n");
-  return -1; 
+  return -1;
 }
