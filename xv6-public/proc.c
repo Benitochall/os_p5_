@@ -638,7 +638,6 @@ int page_fault_handler(uint va)
 
   pte_t *pte = walkpgdir(currproc->pgdir, (void *)va, 0);
 
-  cprintf("PTE for address: 0x%x, PTE value: 0x%x\n", va, *pte);
 
   // Check if the page fault was due to a write on a COW page
   if (pte && (*pte & PTE_COW) && !(*pte & PTE_W))
@@ -671,7 +670,6 @@ int page_fault_handler(uint va)
 
     // now I need to get the specific mapping at I
     struct mem_mapping map = currproc->memoryMappings[i];
-    cprintf("map.length: %d\n", map.length);
 
     if (va >= map.addr && va < PGROUNDUP(map.addr + map.length))
     {
@@ -687,7 +685,6 @@ int page_fault_handler(uint va)
           panic("mapping failed 1");
         }
         ip = f->ip;
-        cprintf("file size%d\n", ip->size);
       }
 
       int file_backed = 0;
@@ -763,14 +760,6 @@ int page_fault_handler(uint va)
       {
         // After successful mappages call
         pte_t *pte = walkpgdir(currproc->pgdir, (void *)va, 0);
-        if (pte)
-        {
-          cprintf("PTE after mappages: 0x%x\n", *pte);
-        }
-        else
-        {
-          cprintf("mappages successful but PTE not found\n");
-        }
       }
 
       file_backed = 0;

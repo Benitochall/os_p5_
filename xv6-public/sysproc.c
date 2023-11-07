@@ -139,7 +139,6 @@ int sys_mmap(void)
 
   if (argint(0, (void *)&addr) < 0 || argint(1, &length) < 0 || argint(2, &prot) < 0 || argint(3, &flags) < 0 || argint(4, &fd) < 0 || argint(5, &offset) < 0)
   {
-    cprintf("Failed 1\n");
     return -1;
   }
 
@@ -159,7 +158,6 @@ int sys_mmap(void)
   // At least one of MAP_SHARED or MAP_PRIVATE should be specified. Also, if MAP_ANONYMOUS is set, then fd should be -1 and offset should be 0.
   if (!((flags & MAP_SHARED) || (flags & MAP_PRIVATE)))
   {
-    cprintf("Failed 3\n");
     return -1;
   }
   if ((flags & MAP_ANONYMOUS) && (fd != -1 || offset != 0))
@@ -170,7 +168,6 @@ int sys_mmap(void)
   // If MAP_FIXED is set, then the address should be non-null and page-aligned.
   if ((flags & MAP_FIXED) && (addr == 0 || (uint)addr % PGSIZE != 0))
   {
-    cprintf("Failed 4\n");
     return -1;
   }
 
@@ -179,7 +176,6 @@ int sys_mmap(void)
   {
     if (fd < 0 || fd >= NOFILE || myproc()->ofile[fd] == 0)
     {
-      cprintf("Failed 5\n");
       return -1; // Invalid file descriptor
     }
   }
@@ -196,7 +192,6 @@ int sys_mmap(void)
     new_address = find_available_address(length);
     if (new_address == 0)
     {
-      cprintf("Failed 6\n");
       return -1; // Failed to find an available address
     }
   }
@@ -213,7 +208,6 @@ int sys_mmap(void)
 
   currproc->memoryMappings[currproc->num_mappings] = new_mapping; // add the new mappings to the struct
   currproc->num_mappings++;
-  cprintf("%x\n", new_address);
   return new_address; // return the new address
 }
 
@@ -278,7 +272,6 @@ int sys_munmap(void)
             end_op();
             if (written_bytes < 0)
             {
-              cprintf("write bytes is negative\n");
               return -1;
             }
           }
@@ -300,7 +293,7 @@ int sys_munmap(void)
 
   if (!found_mapping)
   {
-    cprintf("No matching mapping found for addr=%p\n", addr);
+    return -1; 
   }
 
   return 0;
