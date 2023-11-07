@@ -759,7 +759,8 @@ int page_fault_handler(uint va)
       else
       {
         // After successful mappages call
-        pte_t *pte = walkpgdir(currproc->pgdir, (void *)va, 0);
+        walkpgdir(currproc->pgdir, (void *)va, 0);
+
       }
 
       file_backed = 0;

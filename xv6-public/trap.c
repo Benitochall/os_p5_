@@ -81,7 +81,6 @@ trap(struct trapframe *tf)
     break; 
   case T_PGFLT:
       int ret = page_fault_handler(rcr2()); // Handle page fault, pass the virtual address in
-      cprintf("ret: %d\n", ret);
       if (ret < 0){
         kill(myproc()->pid); 
       }
