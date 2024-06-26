@@ -1,4 +1,3 @@
-# osp5
-This is a readme for our project
-Names: Bennett Challifour and Pranav Chhabra
-cslogins: challifour and chhabra
+# xv6 Memory Mapping
+This project implements memory mapping in xv6 hiding the implementation details to the user of how virtal memory is mapped to physical memory. 
+
